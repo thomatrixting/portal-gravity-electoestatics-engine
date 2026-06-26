@@ -1,5 +1,5 @@
 """
-simulation.py - главный файл всей симуляции, объединяющий всю логику
+simulation.py - main simulation file that ties all the logic together
 """
 
 
@@ -80,18 +80,18 @@ class Simulation:
         self._dragging_mask: Optional[Mask] = None
         self._dragging_obj = None
 
-        # Кэш изолиний
+        # Isoline cache
         self._isolines_cache: Optional[np.ndarray] = None
         self._isolines_dirty = True
 
-        # Буферы рендеринга
+        # Rendering buffers
         sim_w_px = int(sim_width  * px_scale)
         sim_h_px = int(sim_height * px_scale)
         self._sim_w_px = sim_w_px
         self._sim_h_px = sim_h_px
         self._px_int = max(1, int(px_scale))
 
-        # Поле: RGB-Surface без alpha (быстрее чем make_surface + transform.scale)
+        # Field: RGB Surface without alpha (faster than make_surface + transform.scale)
         self._field_surf = pygame.Surface((sim_w_px, sim_h_px))
 
         self._overlay_surf = pygame.Surface((sim_w_px, sim_h_px), pygame.SRCALPHA)
@@ -117,7 +117,7 @@ class Simulation:
 
     def _update_material_dynamics(self) -> None:
         """
-        Обновляет скорость и позицию динамических MaterialObject
+        Updates the velocity and position of dynamic MaterialObjects
         """
 
         needs_invalidate = False
@@ -130,14 +130,14 @@ class Simulation:
             if not np.any(mask):
                 continue
 
-            # Среднее значение градиента внутри объекта
+            # Average gradient value inside the object
             fx = float(-np.mean(self.grad_x[mask]) / obj.mass)
             fy = float(-np.mean(self.grad_y[mask]) / obj.mass)
 
-            obj.vx = (obj.vx + fx) * 0.92  # демпфирование
+            obj.vx = (obj.vx + fx) * 0.92  # damping
             obj.vy = (obj.vy + fy) * 0.92
 
-            # Ограничиваем максимальную скорость
+            # Clamp the maximum speed
             speed = (obj.vx**2 + obj.vy**2) ** 0.5
             max_speed = 2.0
             if speed > max_speed:
@@ -153,7 +153,7 @@ class Simulation:
             self._isolines_dirty = True
 
     def _invalidate_caches(self) -> None:
-        """Инвалидирует кэш физики и кэш рендеринга порталов одним вызовом"""
+        """Invalidates the physics cache and the portal render cache in one call"""
         self._engine.invalidate_mask_cache()
         self._portal_render_dirty = True
         self._isolines_dirty      = True
@@ -171,7 +171,7 @@ class Simulation:
         self._portal_render_dirty = True
 
     def _render_field(self) -> None:
-        """Рендерит поле в предаллоцированную Surface без аллокаций"""
+        """Renders the field into a preallocated Surface with no allocations"""
         data = self.potential if self.view_mode == "potential" else self.g_force
         rgb = self.color_mapper(data)  # (H, W, 3) uint8
         ps = self._px_int
@@ -222,7 +222,7 @@ class Simulation:
         return mask
 
     def _render_portals(self) -> None:
-        """Кэшированный пиксельный рендер"""
+        """Cached pixel-level render"""
 
         if self._portal_render_dirty or self._portal_render_cache is None:
             self._portal_render_cache = self._build_portal_render_cache()
@@ -242,7 +242,7 @@ class Simulation:
         self.sim_surface.blit(ov, (0, 0))
 
     def _build_portal_render_cache(self) -> list:
-        """Вычисляет upscaled маски всех объектов. Вызывается редко."""
+        """Computes upscaled masks for all objects. Called rarely."""
         ps = self._px_int
         sim_w_px = self._sim_w_px
         sim_h_px = self._sim_h_px
@@ -265,13 +265,13 @@ class Simulation:
                 continue
             up = np.repeat(np.repeat(m, ps, axis=0), ps, axis=1)
             up = up[:sim_h_px, :sim_w_px]
-            result.append((up.T.copy(), color))  # T: column-major для surfarray
+            result.append((up.T.copy(), color))  # T: column-major for surfarray
 
         return result
 
 
     def _render_vectors(self) -> None:
-        """Векторное поле"""
+        """Vector field"""
         if not self.show_vectors:
             return
 
@@ -401,7 +401,7 @@ class Simulation:
         return None, None
 
     def _find_obj_at(self, mx: float, my: float):
-        """Возвращает объект под курсором"""
+        """Returns the object under the cursor"""
         pt = (mx, my)
         for obj in self.field:
             if isinstance(obj, CouplePortal):
@@ -426,7 +426,7 @@ class Simulation:
 
         T = "SIMULATION"
 
-        # region Объекты интерфейса
+        # region Interface objects
         panel.add(T, SectionHeader(0, 0, 0, "Portals Engine"))
 
         panel.add(T, SectionHeader(0, 0, 0, "Info"))
@@ -589,7 +589,7 @@ class Simulation:
         self._invalidate_caches()
         self._panel.invalidate_tab("SCENE")
 
-    # region Пресеты
+    # region Presets
     def _presets(self) -> dict:
         return {
             "Couple Portals": self._preset_couple_portals,
@@ -660,11 +660,11 @@ class Simulation:
                         callback=self._close_inspector))
         w.append(SectionHeader(0, 0, 0, type(obj).__name__))
 
-        # Удалить объект
+        # Remove the object
         w.append(Button(0, 0, 0, 24, "Remove from scene",
                         callback=lambda o=obj: self._remove_obj(o)))
 
-        # Потенциал
+        # Potential
         if isinstance(obj, (FixedPotentialPortal, PotentialAnchor)):
             w.append(SectionHeader(0, 0, 0, "Potential"))
             w.append(Slider(0, 0, 0, "φ value",
@@ -691,7 +691,7 @@ class Simulation:
                                 setattr(o, "vx", 0.0),
                                 setattr(o, "vy", 0.0))))
 
-        # Маска
+        # Mask
         if hasattr(obj, "mask"):
             w.append(SectionHeader(0, 0, 0, "Mask type"))
             w.append(Button(0, 0, 0, 24, "Rectangle",
@@ -711,17 +711,17 @@ class Simulation:
                                 o.mask, LineMask)))
             w += self._mask_widgets(obj)
 
-        # Цвет
+        # Color
         if hasattr(obj, "color"):
             w.append(SectionHeader(0, 0, 0, "Color"))
             w += self._color_widgets(obj)
 
         return w
 
-    # Смена типа маски
+    # Change mask type
 
     def _change_mask(self, obj, mask_type: str) -> None:
-        """Заменяет маску объекта на новую"""
+        """Replaces the object's mask with a new one"""
         old = obj.mask
         cx = cy = None
         if isinstance(old, RectangleMask):
@@ -749,7 +749,7 @@ class Simulation:
         self._invalidate_caches()
         self._panel.show_inspector(self._build_inspector(obj))
 
-    # Параметры маски
+    # Mask parameters
     def _mask_widgets(self, obj) -> List:
         mask = obj.mask
         w: List = []
@@ -813,7 +813,7 @@ class Simulation:
         self._invalidate_caches()
         self._isolines_dirty = True
 
-    # Цвет
+    # Color
     def _color_widgets(self, obj) -> List:
         def set_ch(o, ch, v):
             c = list(o.color)
@@ -833,7 +833,7 @@ class Simulation:
         ]
 
     def _remove_obj(self, obj) -> None:
-        """Удаляет объект или портал, содержащий obj, из self.field"""
+        """Removes the object or the portal containing obj from self.field"""
         to_remove = None
         for f in self.field:
             if f is obj:

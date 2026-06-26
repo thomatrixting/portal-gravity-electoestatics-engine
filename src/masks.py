@@ -1,10 +1,10 @@
 """
-masks.py - геометрические маски для определения области порталов
+masks.py - geometric masks for defining portal regions
 
-Каждая маска реализует три операции:
-  __call__(X, Y)     булев массив (для векторизованного рендеринга)
-  __contains__(pt)   bool (для point-in-mask проверки при клике мышью)
-  translate(dx, dy)  перемещение маски
+Each mask implements three operations:
+  __call__(X, Y)     boolean array (for vectorized rendering)
+  __contains__(pt)   bool (for point-in-mask checks on mouse click)
+  translate(dx, dy)  moves the mask
 """
 
 import numpy as np
@@ -15,24 +15,24 @@ from typing import Callable, List, Tuple
 
 
 class Mask(ABC):
-    """Абстрактная маска. Определяет геометрическую область в симуляции"""
+    """Abstract mask. Defines a geometric region in the simulation"""
 
     @abstractmethod
     def __call__(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
-        """Возвращает булев массив той же формы, что X и Y"""
+        """Returns a boolean array with the same shape as X and Y"""
 
     @abstractmethod
     def __contains__(self, point: Tuple[float, float]) -> bool:
-        """Проверяет принадлежность скалярной точки (x, y) маске"""
+        """Checks whether a scalar point (x, y) belongs to the mask"""
 
     @abstractmethod
     def translate(self, dx: float, dy: float) -> None:
-        """Смещает маску на вектор (dx, dy)"""
+        """Shifts the mask by vector (dx, dy)"""
 
 
 @dataclass
 class LineMask(Mask):
-    """Отрезок от точки (x1, y1) до точки (x2, y2) с заданной толщиной thickness"""
+    """Line segment from point (x1, y1) to point (x2, y2) with the given thickness"""
 
     x1: float
     y1: float
@@ -77,7 +77,7 @@ class LineMask(Mask):
 
 @dataclass
 class CircleMask(Mask):
-    """Круглая маска с центром (cx, cy) и радиусом radius"""
+    """Circular mask centered at (cx, cy) with radius radius"""
 
     cx: float
     cy: float
@@ -97,7 +97,7 @@ class CircleMask(Mask):
 
 @dataclass
 class RectangleMask(Mask):
-    """Прямоугольная маска, заданная диапазонами [x_min, x_max] на [y_min, y_max]"""
+    """Rectangular mask defined by ranges [x_min, x_max] by [y_min, y_max]"""
 
     x_min: float
     x_max: float
@@ -132,10 +132,10 @@ class RectangleMask(Mask):
 @dataclass
 class PolygonMask(Mask):
     """
-    Маска в форме произвольного многоугольника
+    Mask in the shape of an arbitrary polygon
 
     Args:
-        vertices: список вершин в порядке обхода [(x0,y0), (x1,y1), ...]
+        vertices: list of vertices in traversal order [(x0,y0), (x1,y1), ...]
     """
 
     vertices: List[Tuple[float, float]]
@@ -174,15 +174,15 @@ class PolygonMask(Mask):
 @dataclass
 class FunctionMask(Mask):
     """
-    Маска, определяемая функцией
+    Mask defined by a function
 
     Examples:
-        FunctionMask("(x - 50)**2 + (y - 50)**2 < 20**2")  # круг
-        FunctionMask("np.abs(x - 50) < 10")  # полоса
+        FunctionMask("(x - 50)**2 + (y - 50)**2 < 20**2")  # circle
+        FunctionMask("np.abs(x - 50) < 10")  # strip
 
     Args:
-        expression: строка выражения
-        offset_x, offset_y: смещение системы координат
+        expression: expression string
+        offset_x, offset_y: coordinate system offset
     """
 
     expression: str

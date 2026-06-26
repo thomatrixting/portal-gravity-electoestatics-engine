@@ -1,16 +1,16 @@
 """
-physics.py - физическое ядро симуляции
+physics.py - physics core of the simulation
 
-Решает уравнение Лапласа методом Red-Black SOR
-(подробнее в explanation/explanation.pdf
+Solves the Laplace equation using the Red-Black SOR method
+(see explanation/explanation.pdf for details
 
-  Объекты:
-    PotentialAnchor       φ = const (якорь, граничное условие Дирихле)
-    FixedPotentialPortal  φ = const (якорь, граничное условие Дирихле. Обладает физическими свойствами)
-    CouplePortal          переносят гравитацию
-    MultiPortal           несколько порталов, соединенных вместе (не спрашивайте)
-    MaterialObject        непрозрачное препятствие
-    ConductorObject       плавающий проводник
+  Objects:
+    PotentialAnchor       φ = const (anchor, Dirichlet boundary condition)
+    FixedPotentialPortal  φ = const (anchor, Dirichlet boundary condition. Has physical properties)
+    CouplePortal          transfers gravity
+    MultiPortal           several portals joined together (don't ask)
+    MaterialObject        opaque obstacle
+    ConductorObject       floating conductor
 """
 
 import numpy as np
@@ -28,22 +28,22 @@ class PhysicsEngine:
 
         self.Y, self.X = np.ogrid[:height, :width]
 
-        # Заранее применяем градиент потецниала (от 1.0 до 0.0). Т.к. это не совместимо с некоторыми сценами,
-        # по умолчанию стоит (0.0, 0.0)
+        # Pre-apply the potential gradient (from 1.0 to 0.0). Since this isn't compatible with some scenes,
+        # the default is (0.0, 0.0)
         y_lin = np.linspace(default_grad[0], default_grad[1], height)
         self.potential = np.tile(y_lin[:, np.newaxis], (1, width)).astype(np.float64)
         self.grad_x    = np.zeros_like(self.potential)
         self.grad_y    = np.zeros_like(self.potential)
         self.g_force   = np.zeros_like(self.potential)
 
-        # Red-Black маски внутренних ячеек
+        # Red-Black masks for interior cells
         i_idx, j_idx = np.meshgrid(np.arange(1, height - 1),
                                     np.arange(1, width - 1), indexing="ij")
         checker = (i_idx + j_idx) % 2
         self._red_inner = checker == 0
         self._black_inner = checker == 1
 
-        # Кэш масок
+        # Mask cache
         self._cache_dirty = True
         self._portal_mask_cache:   Optional[np.ndarray] = None
         self._active_couples_cache: Optional[list]  = None
@@ -147,9 +147,13 @@ class PhysicsEngine:
         upd = self._black_inner & ~frozen_inner
         p[1:-1, 1:-1] = np.where(upd, sor, p[1:-1, 1:-1])
 
-        # Граничные условия
-        p[:, 0]   = p[:, 1] # Нейман боковые
-        p[:, -1]  = p[:, -2]
+        # Boundary conditions
+        # # Neumann sides
+        # p[:, 0]   = p[:, 1]
+        # p[:, -1]  = p[:, -2]
+        # dirichelet sides
+        p[:, 0] = np.zeros(self.height)
+        p[:, -1] = np.zeros(self.height)
 
         # CouplePortal
         for _, m1, m2 in self._active_couples_cache:

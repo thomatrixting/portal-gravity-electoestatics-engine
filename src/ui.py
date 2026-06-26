@@ -1,17 +1,17 @@
 """
-ui.py - функции и объекты виджетов для пользовательского интерфейса
+ui.py - widget functions and objects for the user interface
 
 Widgets:
   Label, Button, Toggle, Stepper, Slider, Divider, SectionHeader
 
-  TabbedPanel - панель с вкладками, скроллом и поддержкой инспектора, хранящий виджеты
+  TabbedPanel - a panel with tabs, scrolling, and inspector support, storing widgets
 """
 
 import pygame
 from typing import Callable, List, Optional, Tuple
 
 
-# region Стиль
+# region Style
 FONT_SIZE_TITLE  = 15
 FONT_SIZE_LABEL  = 13
 FONT_SIZE_SMALL  = 11
@@ -28,10 +28,10 @@ CLR_TEXT_DIM     = (130, 138, 155)
 CLR_GREEN        = (60, 200, 100)
 CLR_RED          = (220,  70,  70)
 
-_BTN_W = 24   # ширина кнопок изменения
-_BTN_H = 20   # высота кнопок изменения
-_VAL_W = 38   # ширина поля значения
-_GAP = 3    # пропуск между элементами
+_BTN_W = 24   # width of the adjustment buttons
+_BTN_H = 20   # height of the adjustment buttons
+_VAL_W = 38   # width of the value field
+_GAP = 3    # gap between elements
 # endregion
 
 
@@ -44,21 +44,21 @@ def _init_fonts() -> dict:
 
 
 class Widget:
-    """Абстрактный виджет: создает виджет на экране"""
+    """Abstract widget: creates a widget on screen"""
 
     def __init__(self, x: int, y: int, w: int, h: int) -> None:
         self.rect = pygame.Rect(x, y, w, h)
 
     def draw(self, surface: pygame.Surface, fonts: dict) -> None:
-        """Отрисовка виджета"""
+        """Draws the widget"""
         pass
 
     def handle_event(self, event: pygame.event.Event) -> bool:
-        """Определяет управления (нажатие, перенос и т.п.)"""
+        """Handles input (click, drag, etc.)"""
         return False
 
     def move_to(self, x: int, y: int) -> None:
-        """Перемещение виджета"""
+        """Moves the widget"""
         self.rect.topleft = (x, y)
 
 
@@ -162,7 +162,7 @@ class Stepper(Widget):
 
     def _get_btn_minus_rect(self) -> pygame.Rect:
         ry = self.rect.y + 3
-        # minus левее, чем plus
+        # minus sits to the left of plus
         plus_left = self.rect.right - _BTN_W - 2
         minus_left = plus_left - _GAP - _BTN_W
         return pygame.Rect(minus_left, ry, _BTN_W, _BTN_H)
@@ -309,13 +309,13 @@ class SectionHeader(Widget):
 
 
 class TabbedPanel:
-    """Панель с вкладками"""
+    """Panel with tabs"""
 
     PADDING = 10
     ITEM_GAP = 6
     TAB_H = 28
-    SCROLL_W  = 6  # ширина полосы прокрутки
-    SCROLL_SPD = 25  # пикселей за тик колёсика
+    SCROLL_W  = 6  # width of the scrollbar
+    SCROLL_SPD = 25  # pixels per wheel tick
 
     def __init__(self, x: int, y: int, w: int, h: int,
                  tab_names: List[str]) -> None:
@@ -328,8 +328,8 @@ class TabbedPanel:
         self._factory_cache: dict = {}
 
         self._inspector: Optional[List[Widget]] = None
-        self._scroll_y = 0  # текущее смещение прокрутки
-        self._content_h = 0  # высота контента (для скроллбара)
+        self._scroll_y = 0  # current scroll offset
+        self._content_h = 0  # content height (for the scrollbar)
         self._surface = pygame.Surface((w, h))
 
         self._sb_dragging = False
@@ -388,10 +388,10 @@ class TabbedPanel:
         pygame.draw.rect(self._surface, CLR_BORDER,
                          pygame.Rect(0, 0, self.rect.w, self.rect.h), 1)
 
-        # Вкладки
+        # Tabs
         self._draw_tabs(fonts)
 
-        # Виджеты
+        # Widgets
         widgets = self._active_widgets
         self._content_h = self._layout(widgets) + self.PADDING  # total content height
 
@@ -420,7 +420,7 @@ class TabbedPanel:
             r = pygame.Rect(self.PADDING + i * tw, ty, tw - 2, self.TAB_H)
             is_active = (i == self._active) and self._inspector is None
             if self._inspector is not None and i == self._active:
-                bg = (38, 42, 52)  # затемняем активную вкладку
+                bg = (38, 42, 52)  # dim the active tab
             else:
                 bg = CLR_ACCENT if is_active else CLR_BTN_INACTIVE
             pygame.draw.rect(self._surface, bg, r, border_radius=4)
@@ -436,10 +436,10 @@ class TabbedPanel:
         ct   = self._content_top()
         cah  = self._content_area_h()
         sb_x = self.rect.w - self.SCROLL_W - 1
-        # Трек
+        # Track
         pygame.draw.rect(self._surface, (35, 38, 48),
                          pygame.Rect(sb_x, ct, self.SCROLL_W, cah), border_radius=3)
-        # Ползунок
+        # Thumb
         ratio    = cah / max(self._content_h, 1)
         thumb_h  = max(20, int(cah * ratio))
         thumb_y  = ct + int(self._scroll_y / max_s * (cah - thumb_h))
@@ -477,13 +477,13 @@ class TabbedPanel:
             self._scroll_y = max(0, min(max_s, self._scroll_y))
             return True
 
-        # Колёсико
+        # Wheel
         if translated.type == pygame.MOUSEWHEEL:
             self._scroll_y -= translated.y * self.SCROLL_SPD
             self._scroll_y  = max(0, min(max_s, self._scroll_y))
             return True
 
-        # Переключение вкладок
+        # Tab switching
         n  = len(self.tab_names)
         tw = (self.rect.w - self.PADDING * 2) // n
         ty = self.PADDING // 2
@@ -496,9 +496,9 @@ class TabbedPanel:
                         self._scroll_y = 0
                     return True
 
-        # Виджеты
+        # Widgets
         if ly < ct:
-            return False  # клик в зону вкладок
+            return False  # click landed in the tab area
         for w in self._active_widgets:
             saved    = w.rect.y
             w.rect.y -= self._scroll_y

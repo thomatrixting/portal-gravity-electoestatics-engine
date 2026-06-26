@@ -1,13 +1,13 @@
 """
-portals.py - классы объектов поля для симуляции потенциала.
+portals.py - field object classes for the potential simulation.
 
 Functions:
-  Portal                базовый портал с маской и цветом
-  FixedPotentialPortal  жёсткое граничное условие Дирихле (φ = const)
-  CouplePortal          пара порталов с равным потенциалом
-  PotentialAnchor       якорь фонового поля (φ = const)
-  MaterialObject        твёрдый объект
-  ConductorObject       твёрдый объект проводник (проводит потенциал)
+  Portal                basic portal with a mask and color
+  FixedPotentialPortal  hard Dirichlet boundary condition (φ = const)
+  CouplePortal          pair of portals with equal potential
+  PotentialAnchor       background field anchor (φ = const)
+  MaterialObject        solid object
+  ConductorObject       solid conductor object (conducts potential)
 """
 
 import numpy as np
@@ -39,7 +39,7 @@ class Portal:
 
 
 class FixedPotentialPortal(Portal):
-    """φ = const (граничное условие Дирихле)"""
+    """φ = const (Dirichlet boundary condition)"""
 
     def __init__(self, mask: "Mask",
                  potential_value: float,
@@ -56,7 +56,7 @@ class FixedPotentialPortal(Portal):
 
 @dataclass
 class CouplePortal:
-    """Пара порталов с одинаковым потенциалом"""
+    """Pair of portals with the same potential"""
     p1: Portal
     p2: Portal
 
@@ -70,7 +70,7 @@ class CouplePortal:
 
 @dataclass
 class MultiPortal:
-    """Несколько порталов с одинаковым потенциалом"""
+    """Several portals with the same potential"""
     args: tuple[Portal]
 
     def get_combined_mask(self, X: "np.ndarray",
@@ -89,9 +89,9 @@ class MultiPortal:
 
 class PotentialAnchor:
     """
-    Якорь потенциала: область с фиксированным потенциалом
+    Potential anchor: a region with fixed potential
 
-    Используется для задания фонового поля
+    Used to define the background field
     """
 
     def __init__(self, mask: "Mask",
@@ -120,14 +120,14 @@ class PotentialAnchor:
 
 class MaterialObject:
     """
-    Твёрдый объект
+    Solid object
 
     Args:
-        mask:   форма объекта
-        color:  цвет отображения
-        pinned: если True - нельзя переместить
-        label:  имя для UI
-        active: если False - игнорируется
+        mask:   shape of the object
+        color:  display color
+        pinned: if True - cannot be moved
+        label:  name shown in the UI
+        active: if False - ignored
     """
 
     def __init__(self, mask: "Mask",
@@ -159,14 +159,14 @@ class MaterialObject:
 
 class ConductorObject:
     """
-    Плавающий проводник
+    Floating conductor
 
     Args:
-        mask:   форма объекта
-        color:  цвет отображения
-        pinned: если True - нельзя перетащить
-        label:  имя для UI
-        active: если False - игнорируется
+        mask:   shape of the object
+        color:  display color
+        pinned: if True - cannot be dragged
+        label:  name shown in the UI
+        active: if False - ignored
     """
 
     def __init__(self, mask: "Mask",

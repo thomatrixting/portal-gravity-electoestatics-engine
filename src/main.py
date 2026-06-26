@@ -1,10 +1,10 @@
 """
-Основной скрипт симуляции
+Main simulation script
 
 Objects:
-  CouplePortal(p1, p2)           пара порталов с равным потенциалом
-  FixedPotentialPortal(mask, v)  область с фиксированным потенциалом
-  PotentialAnchor(mask, v)       якорь потенциала
+  CouplePortal(p1, p2)           pair of portals with equal potential
+  FixedPotentialPortal(mask, v)  region with fixed potential
+  PotentialAnchor(mask, v)       potential anchor
 
 Masks:
   RectangleMask(x_min, x_max, y_min, y_max)
@@ -12,18 +12,18 @@ Masks:
   PointMask(x, y)
   LineMask(x1, y1, x2, y2, thickness)
   PolygonMask([(x0,y0), ...])
-  FunctionMask("выражение(x, y)")
+  FunctionMask("expression(x, y)")
 
 Controls:
-  M - режима отображения гравитационное ускорение / потенциал
-  V - векторы вкл/выкл
-  I - изолинии вкл/выкл
+  M - toggle display mode: gravitational acceleration / potential
+  V - vectors on/off
+  I - isolines on/off
 
-  Drag - перетащить любой портал мышью
-  Вкладка SIM - параметры рендера и физики
-  Вкладка SCENE - объекты сцены, добавление, пресеты, инспектор
+  Drag - drag any portal with the mouse
+  SIM tab - render and physics parameters
+  SCENE tab - scene objects, add, presets, inspector
 
-Подробнее в README.md
+See README.md for details
 """
 
 
@@ -31,8 +31,9 @@ from scenes import *
 
 
 def main() -> None:
-    #sim = example_couple_portals()  # Стартовая сцена
-    sim = triple_portals()
+    sim = example_portal_on_capacitor()
+    #sim = example_couple_portals()  # Starting scene
+    #sim = triple_portals()
     sim.run()
 
 
