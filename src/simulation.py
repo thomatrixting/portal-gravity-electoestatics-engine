@@ -44,6 +44,7 @@ class Simulation:
         self.sim_height = sim_height
         self.px_scale = px_scale
         self.field: List = list(field)
+        self.test_charges: List = []
 
         self.sor_omega = sor_omega
         self.iterations_per_frame = iterations_per_frame
@@ -113,6 +114,7 @@ class Simulation:
         self.grad_y = self._engine.grad_y
         self.g_force = self._engine.g_force
         self._update_material_dynamics()
+        self._update_test_charges()
         self._isolines_dirty = True
 
     def _update_material_dynamics(self) -> None:
@@ -151,6 +153,14 @@ class Simulation:
         if needs_invalidate:
             self._invalidate_caches()
             self._isolines_dirty = True
+
+    def _update_test_charges(self) -> None:
+        """
+        Advances all test charges using the already-solved field.
+        Charges never modify self.field or invalidate the engine cache.
+        """
+        for q in self.test_charges:
+            q.update(self._engine, dt=1.0)
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""
@@ -318,6 +328,19 @@ class Simulation:
                                  (ex[r, c], ey[r, c]),
                                  (ex[r, c] + np.cos(wa) * head_len,
                                   ey[r, c] + np.sin(wa) * head_len), lw)
+                
+    def _render_test_charges(self) -> None:           
+        ps = self.px_scale
+        for q in self.test_charges:
+            if not q.active:
+                continue
+            sx, sy = q.x * ps, q.y * ps
+            if len(q.trail) > 1:
+                pts = [(px * ps, py * ps) for px, py in q.trail]
+                pygame.draw.lines(self.sim_surface, q.color, False, pts, 1)
+            radius = max(2, int(ps * 0.6))
+            pygame.draw.circle(self.sim_surface, q.color, (int(sx), int(sy)), radius)
+
 
 
     def draw(self) -> None:
@@ -325,6 +348,7 @@ class Simulation:
         self._render_isolines()
         self._render_portals()
         self._render_vectors()
+        self._render_test_charges()
         self.screen.blit(self.sim_surface, (0, 0))
         self._panel.draw(self.screen, self._fonts)
         pygame.display.flip()
