@@ -20,12 +20,14 @@ from portals import *
 
 class PhysicsEngine:
     def __init__(self, width: int, height: int,
-                 field: list, sor_omega: float = 1.7, default_grad=(0.0, 0.0)) -> None:
+                 field: list, sor_omega: float = 1.7,
+                default_grad=(0.0, 0.0),
+                ignore_material_objects: bool = True) -> None:
         self.width = width
         self.height = height
         self.field = field
         self.sor_omega = sor_omega
-
+        self._ignore_material_objects = ignore_material_objects
         self.Y, self.X = np.ogrid[:height, :width]
 
         # Pre-apply the potential gradient (from 1.0 to 0.0). Since this isn't compatible with some scenes,
@@ -103,8 +105,9 @@ class PhysicsEngine:
                 dirichlet_cache.append((m, float(obj.potential_value)))
 
         frozen = np.zeros((self.height, self.width), dtype=bool)
-        for _, m in material_list:
-            frozen |= m
+        if self._ignore_material_objects:
+            for _, m in material_list:
+                frozen |= m
         for _, m in conductor_list:
             frozen |= m
         for m, _ in dirichlet_cache:
@@ -149,11 +152,11 @@ class PhysicsEngine:
 
         # Boundary conditions
         # # Neumann sides
-        # p[:, 0]   = p[:, 1]
-        # p[:, -1]  = p[:, -2]
+        p[:, 0]   = p[:, 1]
+        p[:, -1]  = p[:, -2]
         # dirichelet sides
-        p[:, 0] = np.zeros(self.height)
-        p[:, -1] = np.zeros(self.height)
+        #p[:, 0] = np.zeros(self.height)
+        #p[:, -1] = np.zeros(self.height)
 
         # CouplePortal
         for _, m1, m2 in self._active_couples_cache:

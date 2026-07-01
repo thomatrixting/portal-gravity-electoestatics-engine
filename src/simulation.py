@@ -113,6 +113,7 @@ class Simulation:
         self.grad_y = self._engine.grad_y
         self.g_force = self._engine.g_force
         self._update_material_dynamics()
+        self._teleport_material_objects()
         self._isolines_dirty = True
 
     def _update_material_dynamics(self) -> None:
@@ -151,6 +152,37 @@ class Simulation:
         if needs_invalidate:
             self._invalidate_caches()
             self._isolines_dirty = True
+
+    def _teleport_material_objects(self) -> None:
+        """
+        Teleports MaterialObjects that are inside a portal to the other portal
+        """
+        for obj in self.field:
+            if not isinstance(obj, MaterialObject):
+                continue
+            if obj.pinned or not obj.active:
+                continue
+            obj_mask = obj.get_mask(self.X, self.Y)
+            for couple in self._engine._active_couples_cache or []:
+                p1, p2 = couple[0].p1, couple[0].p2
+                m1, m2 = p1.get_mask(self.X, self.Y), p2.get_mask(self.X, self.Y)
+
+                src, dst = None, None
+                if np.any(m1 & obj_mask):
+                    src, dst = p1, p2
+                elif np.any(m2 & obj_mask):
+                    src, dst = p2, p1
+
+                if src is not None:
+                    # Remove the object from the source portal and make it
+                    # reappear at the paired portal, keeping its offset
+                    # relative to the portal's center
+                    ox, oy = obj.mask.center
+                    sx, sy = src.mask.center
+                    dx_, dy_ = dst.mask.center
+                    obj.mask.set(ox + (dx_ - sx), oy + (dy_ - sy))
+                    self._invalidate_caches()
+                    break
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""
@@ -275,7 +307,7 @@ class Simulation:
         if not self.show_vectors:
             return
 
-        step = 5
+        step = 10
         max_len = step * self.px_scale * 2.0
         head_len = max_len * 0.12
         lw  = max(1, int(head_len * 0.2))

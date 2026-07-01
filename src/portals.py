@@ -68,7 +68,7 @@ class CouplePortal:
         return f"CouplePortal(p1={self.p1!r}, p2={self.p2!r})"
 
 
-@dataclass
+#@dataclass
 class MultiPortal:
     """Several portals with the same potential"""
     args: tuple[Portal]

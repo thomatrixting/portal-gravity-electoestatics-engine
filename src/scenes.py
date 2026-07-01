@@ -15,6 +15,66 @@ def _anchors(sim_width, sim_height):
         PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
     ]
 
+def _null_anchors(sim_width, sim_height):
+    """Special preset with potential anchors so gravity behaves like on Earth"""
+    return [
+        PotentialAnchor(RectangleMask(0, sim_width, 0, 1), 0.0),
+        PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
+    ]
+
+def test_portals_scene() -> Simulation:
+    """A scene with a couple of portals and a material object"""
+    W, H = 120, 120
+    p1 = Portal(RectangleMask(50, 70, 30, 30), (255, 0, 0))
+    p2 = Portal(RectangleMask(50, 70, 90, 90), (0, 0, 255))
+
+    obs = MaterialObject(RectangleMask(55,65, 55, 65),
+                         color=(80, 220, 120), pinned=False, label="Conductor",active=True)
+    #self._add_material("Cube",
+    #                        RectangleMask, (180, 180, 180))
+    
+    return Simulation(
+        *_null_anchors(W, H), CouplePortal(p1, p2), obs,
+        sim_width=W, sim_height=H,
+        px_scale=6,
+        iterations_per_frame=50,
+        sor_omega=1.8,
+        isoline_count=15,
+    )
+
+def vertical_portals_many_objects_scene() -> Simulation:
+    """
+    Two vertical portals with a real vertical potential (gravity pulling
+    down) and a grid of many small material objects falling between them
+    """
+    W, H = 120, 120
+    p1 = Portal(RectangleMask(40, 80,20, 20), (255, 0, 0))
+    p2 = Portal(RectangleMask(40, 80,90, 90), (0, 0, 255))
+
+    objs = []
+    rows, cols = 5, 5
+    spacing = 8
+    x0, y0 = 40, 25
+    radius = 1.5
+    for i in range(rows):
+        for j in range(cols):
+            cx = x0 + j * spacing
+            cy = y0 + i * spacing
+            objs.append(MaterialObject(
+                CircleMask(cx, cy, radius),
+                color=(80, 220, 120), pinned=False,
+                label=f"Ball_{i}_{j}", mass=1.0, active=True))
+
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), *objs,
+        sim_width=W, sim_height=H,
+        px_scale=6,
+        iterations_per_frame=50,
+        sor_omega=1.8,
+        isoline_count=15,
+    )
+
+
 def example_portal_on_capacitor() -> Simulation:
     """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
     W,H = 400,200
@@ -95,16 +155,15 @@ def example_couple_circles() -> Simulation:
 
 
 def triple_portals() -> Simulation:
-    W, H = 120, 100
-    p1 = Portal(RectangleMask(40, 60, 30, 30), (255, 0, 0))
-    p2 = Portal(RectangleMask(40, 60, 60, 60), (0, 255, 0))
-    p3 = Portal(RectangleMask(40, 60, 90, 90), (0, 0, 255))
-
-    return Simulation(
-        *_anchors(W, H), MultiPortal((p1, p2, p3)),
-        sim_width=W, sim_height=H,
-        px_scale=6,
-        iterations_per_frame=50,
-        sor_omega=1.8,
-        isoline_count=15,
-    )
+     W, H = 120, 100
+     p1 = Portal(RectangleMask(40, 60, 30, 30), (255, 0, 0))
+     p2 = Portal(RectangleMask(40, 60, 60, 60), (0, 255, 0))
+     p3 = Portal(RectangleMask(40, 60, 90, 90), (0, 0, 255))
+     return Simulation(
+         *_anchors(W, H), MultiPortal((p1, p2, p3)),
+         sim_width=W, sim_height=H,
+         px_scale=6,
+         iterations_per_frame=50,
+         sor_omega=1.8,
+         isoline_count=15,
+     )

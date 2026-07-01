@@ -1,10 +1,12 @@
 """
 masks.py - geometric masks for defining portal regions
 
-Each mask implements three operations:
+Each mask implements these operations:
   __call__(X, Y)     boolean array (for vectorized rendering)
   __contains__(pt)   bool (for point-in-mask checks on mouse click)
-  translate(dx, dy)  moves the mask
+  translate(dx, dy)  moves the mask by a relative offset
+  center             (x, y) of the mask's reference point
+  set(x, y)          moves the mask to an absolute position
 """
 
 import numpy as np
@@ -28,6 +30,16 @@ class Mask(ABC):
     @abstractmethod
     def translate(self, dx: float, dy: float) -> None:
         """Shifts the mask by vector (dx, dy)"""
+
+    @property
+    @abstractmethod
+    def center(self) -> Tuple[float, float]:
+        """Returns the (x, y) reference point of the mask"""
+
+    def set(self, x: float, y: float) -> None:
+        """Moves the mask so that its center is at the absolute point (x, y)"""
+        cx, cy = self.center
+        self.translate(x - cx, y - cy)
 
 
 @dataclass
@@ -74,6 +86,10 @@ class LineMask(Mask):
         self.y2 += dy
         self._update_cache()
 
+    @property
+    def center(self) -> Tuple[float, float]:
+        return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
+
 
 @dataclass
 class CircleMask(Mask):
@@ -93,6 +109,10 @@ class CircleMask(Mask):
     def translate(self, dx: float, dy: float) -> None:
         self.cx += dx
         self.cy += dy
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return (self.cx, self.cy)
 
 
 @dataclass
@@ -127,6 +147,10 @@ class RectangleMask(Mask):
         self.x_max += dx
         self.y_min += dy
         self.y_max += dy
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return ((self.x_min + self.x_max) / 2, (self.y_min + self.y_max) / 2)
 
 
 @dataclass
@@ -170,6 +194,10 @@ class PolygonMask(Mask):
         self._vy += dy
         self.vertices = list(zip(self._vx.tolist(), self._vy.tolist()))
 
+    @property
+    def center(self) -> Tuple[float, float]:
+        return (float(np.mean(self._vx)), float(np.mean(self._vy)))
+
 
 @dataclass
 class FunctionMask(Mask):
@@ -205,3 +233,7 @@ class FunctionMask(Mask):
     def translate(self, dx: float, dy: float) -> None:
         self.offset_x += dx
         self.offset_y += dy
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return (self.offset_x, self.offset_y)
