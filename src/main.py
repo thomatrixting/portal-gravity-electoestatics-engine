@@ -31,7 +31,7 @@ from scenes import *
 
 
 def main() -> None:
-    sim = example_mom_portals()
+    sim = example_mom_couple()
     #sim = example_mom()
     #sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene

@@ -162,18 +162,15 @@ def example_mom() -> Simulation:
         show_isolines=True,
     )
 
-def example_mom_portals() -> Simulation:
+def example_mom_couple() -> Simulation:
     W, H = 80, 80
     top    = PotentialAnchor(RectangleMask(0, W, 0, 1),      1.0)
     bottom = PotentialAnchor(RectangleMask(0, W, H-1, H),    0.0)
-    # Dos portales (placas verticales a los lados)
-    portal_izq = PotentialAnchor(RectangleMask(10, 11, 20, 60), 0.8)
-    portal_der = PotentialAnchor(RectangleMask(69, 70, 20, 60), 0.2)
-    # Carga en el medio (conductor a potencial flotante 0.5)
-    carga = PotentialAnchor(CircleMask(W//2, H//2, 6), 0.5)
-
+    # Portales horizontales: uno arriba y uno abajo
+    p1 = Portal(RectangleMask(20, 60, 20, 21), (255, 153, 0))
+    p2 = Portal(RectangleMask(20, 60, 59, 60), (0, 204, 255))
     return Simulation(
-        top, bottom, portal_izq, portal_der, carga,
+        top, bottom, CouplePortal(p1, p2),
         sim_width=W, sim_height=H,
         px_scale=5,
         solver_mode="mom",

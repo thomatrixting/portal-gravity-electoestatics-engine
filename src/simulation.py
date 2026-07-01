@@ -115,14 +115,21 @@ class Simulation:
 
         W, H = self.sim_width, self.sim_height
         meshes = []
+        coupled_pairs = []
+
         for obj in self.field:
-            if hasattr(obj, 'potential_value') and hasattr(obj, 'mask'):
+            if isinstance(obj, CouplePortal):
+                # Los dos portales comparten phi desconocido
+                m1 = BoundaryMesh(obj.p1.mask, W, H, potential_value=0.0)
+                m2 = BoundaryMesh(obj.p2.mask, W, H, potential_value=0.0)
+                coupled_pairs.append((m1, m2))
+            elif hasattr(obj, 'potential_value') and hasattr(obj, 'mask'):
                 meshes.append(BoundaryMesh(obj.mask, W, H, obj.potential_value))
 
-        if not meshes:
+        if not meshes and not coupled_pairs:
             return
 
-        solver = MOMSolver2D(meshes)
+        solver = MOMSolver2D(meshes, coupled_pairs)
         solver.build_and_solve()
 
         xs = np.arange(W, dtype=float)
@@ -130,7 +137,6 @@ class Simulation:
         grid_x, grid_y = np.meshgrid(xs, ys)
         phi = solver.compute_phi_grid(grid_x, grid_y)
 
-        # Normalizar a [0, 1] para que el render funcione igual que SOR
         phi_min, phi_max = phi.min(), phi.max()
         if phi_max - phi_min > 1e-10:
             phi = (phi - phi_min) / (phi_max - phi_min)
