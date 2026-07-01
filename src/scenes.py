@@ -6,6 +6,7 @@ This file contains example scenes that demonstrate some of this program's featur
 from simulation import Simulation
 from portals import *
 from masks import *
+from test_charge import TestCharge
 
 
 def _anchors(sim_width, sim_height):

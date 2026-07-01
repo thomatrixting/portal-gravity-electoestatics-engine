@@ -140,8 +140,8 @@ class TestCharge:
         return qm * Ex, qm * Ey
 
     def _sample_at(self, engine, x: float, y: float) -> Tuple[float, float]:
-        Ex = self._bilinear_sample(engine.grad_x, x, y, engine.width, engine.height)
-        Ey = self._bilinear_sample(engine.grad_y, x, y, engine.width, engine.height)
+        Ex = -self._bilinear_sample(engine.grad_x, x, y, engine.width, engine.height)
+        Ey = -self._bilinear_sample(engine.grad_y, x, y, engine.width, engine.height)
         return Ex, Ey
 
     def update(self, engine, dt: float) -> None:

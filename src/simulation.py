@@ -6,6 +6,7 @@ simulation.py - main simulation file that ties all the logic together
 import numpy as np
 import pygame
 from typing import List, Optional, Tuple
+from test_charge import TestCharge
 
 from portals import *
 from masks import *
@@ -160,7 +161,7 @@ class Simulation:
         Charges never modify self.field or invalidate the engine cache.
         """
         for q in self.test_charges:
-            q.update(self._engine, dt=1.0)
+            q.update(self._engine, dt=5.0)
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""
@@ -329,17 +330,17 @@ class Simulation:
                                  (ex[r, c] + np.cos(wa) * head_len,
                                   ey[r, c] + np.sin(wa) * head_len), lw)
                 
-    def _render_test_charges(self) -> None:           
+    def _render_test_charges(self) -> None:
         ps = self.px_scale
         for q in self.test_charges:
             if not q.active:
                 continue
-            sx, sy = q.x * ps, q.y * ps
+            sx, sy = int(q.x * ps), int(q.y * ps)
             if len(q.trail) > 1:
-                pts = [(px * ps, py * ps) for px, py in q.trail]
+                pts = [(int(px * ps), int(py * ps)) for px, py in q.trail]
                 pygame.draw.lines(self.sim_surface, q.color, False, pts, 1)
-            radius = max(2, int(ps * 0.6))
-            pygame.draw.circle(self.sim_surface, q.color, (int(sx), int(sy)), radius)
+            radius = max(4, int(ps * 1.5))
+            pygame.draw.circle(self.sim_surface, q.color, (sx, sy), radius)
 
 
 
@@ -394,13 +395,23 @@ class Simulation:
                 self._dragging_obj  = None
 
             elif (event.type == pygame.MOUSEMOTION
-                  and self._dragging_mask is not None):
+              and self._dragging_mask is not None):
                 dx = event.rel[0] / ps
                 dy = event.rel[1] / ps
-                self._dragging_mask.translate(dx, dy)
-                self._invalidate_caches()
-                self._isolines_dirty = True
-                self._panel.invalidate_tab("SCENE")
+                if isinstance(self._dragging_obj, TestCharge):
+                    self._dragging_obj.x = max(0.0, min(self.sim_width  - 1.0,
+                                                        self._dragging_obj.x + dx))
+                    self._dragging_obj.y = max(0.0, min(self.sim_height - 1.0,
+                                                        self._dragging_obj.y + dy))
+                    self._dragging_obj.vx = 0.0
+                    self._dragging_obj.vy = 0.0
+                    self._dragging_obj._initialized_accel = False
+                    self._dragging_obj.reset_trail()
+                else:
+                    self._dragging_mask.translate(dx, dy)
+                    self._invalidate_caches()
+                    self._isolines_dirty = True
+                    self._panel.invalidate_tab("SCENE")
 
         return True
 
@@ -422,6 +433,9 @@ class Simulation:
                 for p in obj.args:
                     if pt in p:
                         return p.mask, p
+        for q in self.test_charges:
+            if q.active and abs(mx - q.x) < 3 and abs(my - q.y) < 3:
+                return q, q
         return None, None
 
     def _find_obj_at(self, mx: float, my: float):
@@ -441,6 +455,9 @@ class Simulation:
                 for p in obj.args:
                     if pt in p:
                         return p
+        for q in self.test_charges:
+            if q.active and abs(mx - q.x) < 3 and abs(my - q.y) < 3:
+                return q
         return None
 
     def _build_panel(self) -> TabbedPanel:
@@ -556,6 +573,10 @@ class Simulation:
                 w.append(Button(0, 0, 0, 24,
                                 f"{pin} {obj.label}  ({_mask_type(obj.mask)})",
                                 callback=lambda o=obj: self._open_inspector(o)))
+        for i, q in enumerate(self.test_charges):
+            w.append(Button(0, 0, 0, 24,
+                            f"TestCharge {i+1}  q={q.charge:.3f}",
+                            callback=lambda o=q: self._open_test_charge_inspector(o)))
 
         w.append(Divider(0, 0, 0))
         w.append(SectionHeader(0, 0, 0, "Add"))
@@ -571,6 +592,8 @@ class Simulation:
         w.append(Button(0, 0, 0, 24, "+ Planet",
                         callback=lambda: self._add_material("Planet",
                             CircleMask, (140, 90, 60))))
+        w.append(Button(0, 0, 0, 24, "+ Test Charge",
+                        callback=self._add_test_charge))
         w.append(Divider(0, 0, 0))
 
         w.append(SectionHeader(0, 0, 0, "Presets"))
@@ -608,6 +631,63 @@ class Simulation:
             mask = CircleMask(cx, cy, 10)
         self.field.append(MaterialObject(mask, color=color, label=label))
         self._refresh_field()
+    
+    def _add_test_charge(self) -> None:
+        cx, cy = self._cx(), self._cy()
+        q = TestCharge(x=float(cx), y=float(cy),
+                    vx=0.0, vy=0.0,
+                    charge=0.01, mass=1.0,
+                    color=(255, 220, 0), trail_len=300)
+        self.test_charges.append(q)
+        self._panel.invalidate_tab("SCENE")   # refresca la lista, NO toca field ni engine
+
+    def _open_test_charge_inspector(self, q: TestCharge) -> None:
+        self._panel.show_inspector(self._build_test_charge_inspector(q))
+
+    def _build_test_charge_inspector(self, q: TestCharge) -> List:
+        w: List = []
+        w.append(Button(0, 0, 0, 26, "<- Back",
+                        callback=self._close_inspector))
+        w.append(SectionHeader(0, 0, 0, "Test Charge"))
+        w.append(Button(0, 0, 0, 24, "Remove",
+                        callback=lambda: (self.test_charges.remove(q),
+                                        self._close_inspector())))
+        w.append(Divider(0, 0, 0))
+        w.append(SectionHeader(0, 0, 0, "Parameters"))
+        w.append(Stepper(0, 0, 0, "Charge q",
+                        getter=lambda: q.charge,
+                        setter=lambda v: setattr(q, "charge",
+                                                round(v, 4)),
+                        step=0.001, fmt="{:.4f}",
+                        min_val=-1.0, max_val=1.0))
+        w.append(Stepper(0, 0, 0, "Mass m",
+                        getter=lambda: q.mass,
+                        setter=lambda v: setattr(q, "mass", max(0.01, v)),
+                        step=0.1, fmt="{:.2f}",
+                        min_val=0.01, max_val=100.0))
+        w.append(Stepper(0, 0, 0, "Trail length",
+                        getter=lambda: q.trail_len,
+                        setter=lambda v: (setattr(q, "trail_len", int(v)),
+                                        q.reset_trail()),
+                        step=50, fmt="{:.0f}",
+                        min_val=0, max_val=2000))
+        w.append(Divider(0, 0, 0))
+        w.append(SectionHeader(0, 0, 0, "State"))
+        w.append(Label(0, 0, 0, "x",
+                    value_fn=lambda: f"{q.x:.1f}"))
+        w.append(Label(0, 0, 0, "y",
+                    value_fn=lambda: f"{q.y:.1f}"))
+        w.append(Label(0, 0, 0, "|v|",
+                    value_fn=lambda: f"{(q.vx**2+q.vy**2)**0.5:.3f}"))
+        w.append(Label(0, 0, 0, "KE",
+                    value_fn=lambda: f"{q.kinetic_energy():.4e}"))
+        w.append(Button(0, 0, 0, 24, "Stop (reset velocity)",
+                        callback=lambda: (setattr(q, "vx", 0.0),
+                                        setattr(q, "vy", 0.0),
+                                        setattr(q, "_initialized_accel", False))))
+        w.append(Button(0, 0, 0, 24, "Clear trail",
+                        callback=q.reset_trail))
+        return w
 
     def _refresh_field(self) -> None:
         self._invalidate_caches()
@@ -687,6 +767,10 @@ class Simulation:
         # Remove the object
         w.append(Button(0, 0, 0, 24, "Remove from scene",
                         callback=lambda o=obj: self._remove_obj(o)))
+        
+        #TestCharge
+        if isinstance(obj, TestCharge):
+            return self._build_test_charge_inspector(obj)
 
         # Potential
         if isinstance(obj, (FixedPotentialPortal, PotentialAnchor)):
