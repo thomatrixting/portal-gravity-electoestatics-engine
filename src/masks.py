@@ -7,13 +7,14 @@ Each mask implements these operations:
   translate(dx, dy)  moves the mask by a relative offset
   center             (x, y) of the mask's reference point
   set(x, y)          moves the mask to an absolute position
+  size()             (width, height) of the mask's bounding box, or None
 """
 
 import numpy as np
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 
 class Mask(ABC):
@@ -40,6 +41,11 @@ class Mask(ABC):
         """Moves the mask so that its center is at the absolute point (x, y)"""
         cx, cy = self.center
         self.translate(x - cx, y - cy)
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        """Returns the (width, height) of the mask's bounding box, or None if
+        not analytically computable"""
+        return None
 
 
 @dataclass
@@ -90,6 +96,10 @@ class LineMask(Mask):
     def center(self) -> Tuple[float, float]:
         return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
 
+    def size(self) -> Optional[Tuple[float, float]]:
+        return (abs(self.x2 - self.x1) + 2 * self.thickness,
+                abs(self.y2 - self.y1) + 2 * self.thickness)
+
 
 @dataclass
 class CircleMask(Mask):
@@ -113,6 +123,9 @@ class CircleMask(Mask):
     @property
     def center(self) -> Tuple[float, float]:
         return (self.cx, self.cy)
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        return (2 * self.radius, 2 * self.radius)
 
 
 @dataclass
@@ -151,6 +164,9 @@ class RectangleMask(Mask):
     @property
     def center(self) -> Tuple[float, float]:
         return ((self.x_min + self.x_max) / 2, (self.y_min + self.y_max) / 2)
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        return (self.x_max - self.x_min, self.y_max - self.y_min)
 
 
 @dataclass
@@ -198,6 +214,10 @@ class PolygonMask(Mask):
     def center(self) -> Tuple[float, float]:
         return (float(np.mean(self._vx)), float(np.mean(self._vy)))
 
+    def size(self) -> Optional[Tuple[float, float]]:
+        return (float(self._vx.max() - self._vx.min()),
+                float(self._vy.max() - self._vy.min()))
+
 
 @dataclass
 class FunctionMask(Mask):
@@ -237,3 +257,104 @@ class FunctionMask(Mask):
     @property
     def center(self) -> Tuple[float, float]:
         return (self.offset_x, self.offset_y)
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        # Not analytically computable from an arbitrary expression - kept as
+        # an explicit override (rather than relying on the base default) so
+        # it's clear this is intentional and not a missing implementation.
+        return None
+
+
+@dataclass
+class ArrayMask(Mask):
+    """
+    Mask backed by an explicit boolean grid shaped exactly like the
+    simulation's (H, W) coordinate grid. Represents irregular/composite
+    regions that no geometric formula can express - e.g. a MaterialObject
+    mid-teleport, split between a source and destination portal.
+    """
+
+    grid: np.ndarray  # bool, shape (H, W): axis 0 = Y/row, axis 1 = X/col
+
+    def __post_init__(self) -> None:
+        self.grid = np.asarray(self.grid, dtype=bool)
+        self._accum_dx: float = 0.0  # sub-pixel translate() accumulator
+        self._accum_dy: float = 0.0
+
+    def __call__(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+        expected_shape = np.broadcast(X, Y).shape
+        if self.grid.shape != expected_shape:
+            raise ValueError(
+                f"ArrayMask grid shape {self.grid.shape} does not match "
+                f"simulation grid shape {expected_shape}")
+        return self.grid
+
+    def __contains__(self, point: Tuple[float, float]) -> bool:
+        x, y = point
+        xi, yi = int(round(x)), int(round(y))
+        h, w = self.grid.shape
+        if not (0 <= yi < h and 0 <= xi < w):
+            return False
+        return bool(self.grid[yi, xi])
+
+    def translate(self, dx: float, dy: float) -> None:
+        self._accum_dx += dx
+        self._accum_dy += dy
+        shift_x = int(round(self._accum_dx))
+        shift_y = int(round(self._accum_dy))
+        if shift_x == 0 and shift_y == 0:
+            return
+        self._accum_dx -= shift_x
+        self._accum_dy -= shift_y
+        self.grid = ArrayMask._shift_grid(self.grid, shift_x, shift_y)
+
+    @staticmethod
+    def _shift_grid(grid: np.ndarray, shift_x: int, shift_y: int) -> np.ndarray:
+        """Shifts a boolean grid by (shift_x, shift_y) pixels, zero-filling
+        vacated cells (no wraparound, unlike np.roll)"""
+        h, w = grid.shape
+        out = np.zeros_like(grid)
+
+        if shift_x >= 0:
+            sx_src, sx_dst = slice(0, w - shift_x), slice(shift_x, w)
+        else:
+            sx_src, sx_dst = slice(-shift_x, w), slice(0, w + shift_x)
+        if shift_y >= 0:
+            sy_src, sy_dst = slice(0, h - shift_y), slice(shift_y, h)
+        else:
+            sy_src, sy_dst = slice(-shift_y, h), slice(0, h + shift_y)
+
+        if sx_dst.start >= sx_dst.stop or sy_dst.start >= sy_dst.stop:
+            return out  # shifted entirely off-grid
+        out[sy_dst, sx_dst] = grid[sy_src, sx_src]
+        return out
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        ys, xs = np.nonzero(self.grid)
+        if len(xs) == 0:
+            # Empty mask: no meaningful center. Fall back to the grid's
+            # center rather than raising - callers (np.any guards) already
+            # skip empty masks before this would matter physically.
+            h, w = self.grid.shape
+            return (w / 2.0, h / 2.0)
+        return (float(np.mean(xs)), float(np.mean(ys)))
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        ys, xs = np.nonzero(self.grid)
+        if len(xs) == 0:
+            return (0.0, 0.0)
+        return (float(xs.max() - xs.min() + 1), float(ys.max() - ys.min() + 1))
+
+    def set(self, region: np.ndarray) -> None:
+        """Replaces the mask's content with `region` (bool array, must match
+        the stored grid's shape). Overrides the base class's position-based
+        `set(x, y)` for this subclass only - see masks.py module docstring"""
+        region = np.asarray(region, dtype=bool)
+        if region.shape != self.grid.shape:
+            raise ValueError(
+                f"region shape {region.shape} does not match mask grid "
+                f"shape {self.grid.shape}")
+        self.grid = region
+        self._accum_dx = 0.0
+        self._accum_dy = 0.0

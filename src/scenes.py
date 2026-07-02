@@ -25,8 +25,8 @@ def _null_anchors(sim_width, sim_height):
 def test_portals_scene() -> Simulation:
     """A scene with a couple of portals and a material object"""
     W, H = 120, 120
-    p1 = Portal(RectangleMask(50, 70, 30, 30), (255, 0, 0))
-    p2 = Portal(RectangleMask(50, 70, 90, 90), (0, 0, 255))
+    p1 = Portal(RectangleMask(40, 80, 30, 30), (255, 0, 0))
+    p2 = Portal(RectangleMask(40, 80, 90, 90), (0, 0, 255))
 
     obs = MaterialObject(RectangleMask(55,65, 55, 65),
                          color=(80, 220, 120), pinned=False, label="Conductor",active=True)
@@ -34,7 +34,7 @@ def test_portals_scene() -> Simulation:
     #                        RectangleMask, (180, 180, 180))
     
     return Simulation(
-        *_null_anchors(W, H), CouplePortal(p1, p2), obs,
+        *_anchors(W, H), CouplePortal(p1, p2), obs,
         sim_width=W, sim_height=H,
         px_scale=6,
         iterations_per_frame=50,
@@ -47,21 +47,21 @@ def vertical_portals_many_objects_scene() -> Simulation:
     Two vertical portals with a real vertical potential (gravity pulling
     down) and a grid of many small material objects falling between them
     """
-    W, H = 120, 120
-    p1 = Portal(RectangleMask(40, 80,20, 20), (255, 0, 0))
-    p2 = Portal(RectangleMask(40, 80,90, 90), (0, 0, 255))
+    W, H = 220, 120
+    p1 = Portal(RectangleMask(130, 180,30, 30), (255, 0, 0))
+    p2 = Portal(RectangleMask(30, 80,90, 90), (0, 0, 255))
 
     objs = []
-    rows, cols = 5, 5
-    spacing = 8
-    x0, y0 = 40, 25
-    radius = 1.5
+    rows, cols = 10, 10
+    spacing = 5
+    x0, y0 = 40, 30
+    radius = 0
     for i in range(rows):
         for j in range(cols):
             cx = x0 + j * spacing
             cy = y0 + i * spacing
             objs.append(MaterialObject(
-                CircleMask(cx, cy, radius),
+                RectangleMask(cx-radius, cx+radius, cy-radius, cy+radius),
                 color=(80, 220, 120), pinned=False,
                 label=f"Ball_{i}_{j}", mass=1.0, active=True))
 

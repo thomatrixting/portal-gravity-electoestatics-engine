@@ -44,6 +44,7 @@ class Simulation:
         self.sim_height = sim_height
         self.px_scale = px_scale
         self.field: List = list(field)
+        self.damping = False
 
         self.sor_omega = sor_omega
         self.iterations_per_frame = iterations_per_frame
@@ -135,12 +136,17 @@ class Simulation:
             fx = float(-np.mean(self.grad_x[mask]) / obj.mass)
             fy = float(-np.mean(self.grad_y[mask]) / obj.mass)
 
-            obj.vx = (obj.vx + fx) * 0.92  # damping
-            obj.vy = (obj.vy + fy) * 0.92
+            if self.damping:
+                # Damping factor to prevent oscillations
+                obj.vx = (obj.vx + fx) * 0.92  # damping
+                obj.vy = (obj.vy + fy) * 0.92
+            else:
+                obj.vx = (obj.vx + fx)   # damping
+                obj.vy = (obj.vy + fy) 
 
             # Clamp the maximum speed
             speed = (obj.vx**2 + obj.vy**2) ** 0.5
-            max_speed = 2.0
+            max_speed = 100000.0
             if speed > max_speed:
                 obj.vx = obj.vx / speed * max_speed
                 obj.vy = obj.vy / speed * max_speed
@@ -155,34 +161,82 @@ class Simulation:
 
     def _teleport_material_objects(self) -> None:
         """
-        Teleports MaterialObjects that are inside a portal to the other portal
+        Splits MaterialObjects crossing a portal: the part of the mask
+        overlapping the source portal is removed and reappears (shifted one
+        extra unit along the object's velocity) at the paired portal, while
+        the rest of the object stays put - both pieces remain one object
         """
         for obj in self.field:
             if not isinstance(obj, MaterialObject):
                 continue
             if obj.pinned or not obj.active:
                 continue
-            obj_mask = obj.get_mask(self.X, self.Y)
-            for couple in self._engine._active_couples_cache or []:
-                p1, p2 = couple[0].p1, couple[0].p2
-                m1, m2 = p1.get_mask(self.X, self.Y), p2.get_mask(self.X, self.Y)
 
-                src, dst = None, None
-                if np.any(m1 & obj_mask):
-                    src, dst = p1, p2
-                elif np.any(m2 & obj_mask):
-                    src, dst = p2, p1
+            obj_bool = obj.get_mask(self.X, self.Y)
+            if not np.any(obj_bool):
+                continue
 
-                if src is not None:
-                    # Remove the object from the source portal and make it
-                    # reappear at the paired portal, keeping its offset
-                    # relative to the portal's center
-                    ox, oy = obj.mask.center
-                    sx, sy = src.mask.center
-                    dx_, dy_ = dst.mask.center
-                    obj.mask.set(ox + (dx_ - sx), oy + (dy_ - sy))
-                    self._invalidate_caches()
-                    break
+            for couple_obj, m1, m2 in self._engine._active_couples_cache or []:
+                p1, p2 = couple_obj.p1, couple_obj.p2
+                intersect1, intersect2 = m1 & obj_bool, m2 & obj_bool
+                has1, has2 = np.any(intersect1), np.any(intersect2)
+                if not has1 and not has2:
+                    continue
+
+                # If the object overlaps both mouths at once (mid-transit
+                # continuation, or a large object spanning both), the
+                # larger-overlap side is treated as the active source
+                if has1 and has2:
+                    if np.sum(intersect1) >= np.sum(intersect2):
+                        src, dst, intersection = p1, p2, intersect1
+                    else:
+                        src, dst, intersection = p2, p1, intersect2
+                elif has1:
+                    src, dst, intersection = p1, p2, intersect1
+                else:
+                    src, dst, intersection = p2, p1, intersect2
+
+                remainder = obj_bool & ~intersection
+                shift_x, shift_y = self._compute_teleport_shift(obj, src, dst)
+                shifted_piece = ArrayMask._shift_grid(intersection, shift_x, shift_y)
+                new_grid = remainder | shifted_piece
+
+                if not np.any(new_grid):
+                    break  # defensive: don't assign an empty mask
+
+                if isinstance(obj.mask, ArrayMask):
+                    obj.mask.set(new_grid)
+                else:
+                    obj.mask = ArrayMask(new_grid)
+
+                self._invalidate_caches()
+                break
+
+    def _compute_teleport_shift(self, obj: "MaterialObject",
+                                 src, dst) -> Tuple[int, int]:
+        """
+        Pixel shift from src's footprint to dst's, plus a 1-unit push along
+        the object's velocity direction so the piece clears the destination
+        portal's thickness instead of landing back on top of it (which would
+        re-trigger a teleport back next frame)
+        """
+        sx, sy = src.mask.center
+        dxc, dyc = dst.mask.center
+        base_dx, base_dy = dxc - sx, dyc - sy
+
+        speed = (obj.vx ** 2 + obj.vy ** 2) ** 0.5
+        if speed > 1e-6:
+            nx, ny = obj.vx / speed, obj.vy / speed
+        else:
+            # No velocity to take a direction from - fall back to the
+            # src -> dst axis
+            base_len = (base_dx ** 2 + base_dy ** 2) ** 0.5
+            if base_len > 1e-6:
+                nx, ny = base_dx / base_len, base_dy / base_len
+            else:
+                nx, ny = 0.0, 0.0
+
+        return int(round(base_dx + nx)), int(round(base_dy + ny))
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""

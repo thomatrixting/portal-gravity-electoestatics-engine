@@ -105,7 +105,7 @@ class PhysicsEngine:
                 dirichlet_cache.append((m, float(obj.potential_value)))
 
         frozen = np.zeros((self.height, self.width), dtype=bool)
-        if self._ignore_material_objects:
+        if not self._ignore_material_objects:
             for _, m in material_list:
                 frozen |= m
         for _, m in conductor_list:
