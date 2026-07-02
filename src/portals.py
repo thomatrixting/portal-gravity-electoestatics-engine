@@ -203,3 +203,7 @@ class ConductorObject:
         if self.active:
             return self.mask(X, Y)
         return np.zeros(X.shape, dtype=bool)
+    def to_mom_boundary(self, grid_array, dx=1.0):
+        from mom_mesh import BoundaryMesh
+        # grid_array es el bool 2D que ya usa tu mask internamente
+        return BoundaryMesh(grid_array, potential_value=0.5, dx=dx)

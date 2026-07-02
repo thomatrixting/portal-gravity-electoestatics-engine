@@ -27,6 +27,7 @@ class Simulation:
                  sim_width: int,
                  sim_height: int,
                  px_scale: float,
+                 solver_mode: str = "sor",
                  iterations_per_frame: int = 50,
                  diff_threshold: float = 1e-4,
                  view_mode: str = "g_force",
@@ -70,12 +71,18 @@ class Simulation:
 
         self.Y, self.X = np.ogrid[:sim_height, :sim_width]
 
+        self.solver_mode = solver_mode
+
         self._engine = PhysicsEngine(
             sim_width, sim_height, self.field, sor_omega=self.sor_omega)
         self.potential = self._engine.potential
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
         self.g_force = self._engine.g_force
+
+        # MOM: se resuelve una sola vez en setup
+        if self.solver_mode == "mom":
+            self._mom_setup()
 
         # Drag
         self._dragging_mask: Optional[Mask] = None
@@ -103,7 +110,48 @@ class Simulation:
         self._fonts = _init_fonts()
         self._panel = self._build_panel()
 
+    def _mom_setup(self) -> None:
+        from mom_mesh import BoundaryMesh
+        from mom_solver import MOMSolver2D
+
+        W, H = self.sim_width, self.sim_height
+        meshes = []
+        coupled_pairs = []
+
+        for obj in self.field:
+            if isinstance(obj, CouplePortal):
+                # Los dos portales comparten phi desconocido
+                m1 = BoundaryMesh(obj.p1.mask, W, H, potential_value=0.0)
+                m2 = BoundaryMesh(obj.p2.mask, W, H, potential_value=0.0)
+                coupled_pairs.append((m1, m2))
+            elif hasattr(obj, 'potential_value') and hasattr(obj, 'mask'):
+                meshes.append(BoundaryMesh(obj.mask, W, H, obj.potential_value))
+
+        if not meshes and not coupled_pairs:
+            return
+
+        solver = MOMSolver2D(meshes, coupled_pairs)
+        solver.build_and_solve()
+
+        xs = np.arange(W, dtype=float)
+        ys = np.arange(H, dtype=float)
+        grid_x, grid_y = np.meshgrid(xs, ys)
+        phi = solver.compute_phi_grid(grid_x, grid_y)
+
+        phi_min, phi_max = phi.min(), phi.max()
+        if phi_max - phi_min > 1e-10:
+            phi = (phi - phi_min) / (phi_max - phi_min)
+
+        self.potential[:] = phi
+        self._engine.compute_gradients()
+        self.grad_x = self._engine.grad_x
+        self.grad_y = self._engine.grad_y
+        self.g_force = self._engine.g_force
+        self.diff = 0.0
+
     def update_physics(self) -> None:
+        if self.solver_mode == "mom":
+            return  # MOM ya resolvió en setup, no hay iteraciones
         self._engine.sor_omega = self.sor_omega
         self.diff = self._engine.run_steps(
             self.iterations_per_frame, self.diff_threshold)
