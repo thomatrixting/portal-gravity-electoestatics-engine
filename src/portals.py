@@ -60,6 +60,15 @@ class CouplePortal:
     p1: Portal
     p2: Portal
 
+    def __post_init__(self) -> None:
+        s1, s2 = self.p1.mask.size(), self.p2.mask.size()
+        if s1 is None or s2 is None:
+            return  # not analytically comparable (e.g. FunctionMask side)
+        if abs(s1[0] - s2[0]) > 1e-6 or abs(s1[1] - s2[1]) > 1e-6:
+            raise ValueError(
+                f"CouplePortal requires p1 and p2 masks to have the same "
+                f"size; got {s1} vs {s2}")
+
     def get_combined_mask(self, X: "np.ndarray",
                           Y: "np.ndarray") -> "np.ndarray":
         return self.p1.get_mask(X, Y) | self.p2.get_mask(X, Y)
@@ -68,7 +77,7 @@ class CouplePortal:
         return f"CouplePortal(p1={self.p1!r}, p2={self.p2!r})"
 
 
-@dataclass
+#@dataclass
 class MultiPortal:
     """Several portals with the same potential"""
     args: tuple[Portal]
