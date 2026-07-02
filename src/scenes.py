@@ -176,3 +176,38 @@ def example_mom_couple() -> Simulation:
         solver_mode="mom",
         show_isolines=True,
     )
+
+def example_mom_carga_entre_portales() -> Simulation:
+    """Carga flotante entre dos portales, sin campo externo"""
+    W, H = 80, 80
+    # Sin placas top/bottom — solo los portales y la carga
+    p1 = Portal(RectangleMask(10, 11, 15, 65), (255, 153, 0))
+    p2 = Portal(RectangleMask(69, 70, 15, 65), (0, 204, 255))
+    carga = PotentialAnchor(CircleMask(W//2, H//2, 6), 1.0)
+    return Simulation(
+        CouplePortal(p1, p2), carga,
+        sim_width=W, sim_height=H,
+        px_scale=5,
+        solver_mode="mom",
+        show_isolines=True,
+    )
+
+
+def example_mom_cargas_afuera() -> Simulation:
+    """Dos portales verticales con cargas a los lados externos"""
+    W, H = 80, 80
+    top    = PotentialAnchor(RectangleMask(0, W, 0, 1),   0.0)
+    bottom = PotentialAnchor(RectangleMask(0, W, H-1, H), 0.0)
+    # Portales verticales en el centro
+    p1 = Portal(RectangleMask(35, 36, 20, 60), (255, 153, 0))
+    p2 = Portal(RectangleMask(44, 45, 20, 60), (0, 204, 255))
+    # Cargas a los lados externos de los portales
+    carga_izq = PotentialAnchor(CircleMask(15, H//2, 5), 0.9)
+    carga_der = PotentialAnchor(CircleMask(65, H//2, 5), 0.1)
+    return Simulation(
+        CouplePortal(p1, p2), carga_izq, carga_der,
+        sim_width=W, sim_height=H,
+        px_scale=5,
+        solver_mode="mom",
+        show_isolines=True,
+    )
