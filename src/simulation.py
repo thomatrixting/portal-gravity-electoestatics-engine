@@ -30,7 +30,7 @@ class Simulation:
                  px_scale: float,
                  iterations_per_frame: int = 50,
                  diff_threshold: float = 1e-4,
-                 view_mode: str = "g_force",
+                 view_mode: str = "potential",
                  show_vectors: bool = False,
                  show_isolines: bool = False,
                  isoline_count: int = 10,
@@ -77,7 +77,7 @@ class Simulation:
         self.potential = self._engine.potential
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.g_force = self._engine.g_force
+        self.E_magnitude = self._engine.E_magnitude
 
         # Drag
         self._dragging_mask: Optional[Mask] = None
@@ -114,7 +114,7 @@ class Simulation:
         self.potential = self._engine.potential
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.g_force = self._engine.g_force
+        self.E_magnitude = self._engine.E_magnitude
         self._update_material_dynamics()
         self._teleport_material_objects()
         self._update_test_charges()
@@ -262,14 +262,14 @@ class Simulation:
         self.potential = self._engine.potential
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.g_force = self._engine.g_force
+        self.E_magnitude = self._engine.E_magnitude
         self.total_iterations = 0
         self._isolines_dirty = True
         self._portal_render_dirty = True
 
     def _render_field(self) -> None:
         """Renders the field into a preallocated Surface with no allocations"""
-        data = self.potential if self.view_mode == "potential" else self.g_force
+        data = self.potential if self.view_mode == "potential" else self.E_magnitude
         rgb = self.color_mapper(data)  # (H, W, 3) uint8
         ps = self._px_int
         rgbT = np.ascontiguousarray(rgb.transpose(1, 0, 2))  # (W, H, 3)
@@ -283,7 +283,7 @@ class Simulation:
     def _render_isolines(self) -> None:
         if not self.show_isolines:
             return
-        data = self.potential if self.view_mode == "potential" else self.g_force
+        data = self.potential if self.view_mode == "potential" else self.E_magnitude    
         if self._isolines_dirty or self._isolines_cache is None:
             self._isolines_cache = self._compute_isolines(data)
             self._isolines_dirty = False
@@ -450,7 +450,7 @@ class Simulation:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_m:
-                    self.view_mode = ("g_force" if self.view_mode == "potential"
+                    self.view_mode = ("E_magnitude" if self.view_mode == "potential"
                                       else "potential")
                 elif event.key == pygame.K_v:
                     self.show_vectors = not self.show_vectors
@@ -568,9 +568,9 @@ class Simulation:
         panel.add(T, Divider(0, 0, 0))
 
         panel.add(T, SectionHeader(0, 0, 0, "View Mode"))
-        panel.add(T, Button(0, 0, 0, 26, "Force",
-                            callback=lambda: setattr(self, "view_mode", "g_force"),
-                            active_fn=lambda: self.view_mode == "g_force"))
+        panel.add(T, Button(0, 0, 0, 26, "Electric field |E|",
+                            callback=lambda: setattr(self, "view_mode", "E_magnitude"),
+                            active_fn=lambda: self.view_mode == "E_magnitude"))
         panel.add(T, Button(0, 0, 0, 26, "Potential",
                             callback=lambda: setattr(self, "view_mode", "potential"),
                             active_fn=lambda: self.view_mode == "potential"))

@@ -29,7 +29,7 @@ Field sampling: grad_x / grad_y live on the integer grid, but the charge's
 position is continuous, so E is bilinearly interpolated from the four
 surrounding grid cells (see _bilinear_sample).
 
-Boundary handling: clamping. If the (would-be) position falls outside
+***Boundary handling: clamping. If the (would-be) position falls outside
 [0, width-1] x [0, height-1], the position is clipped back onto the
 nearest valid coordinate and the velocity component pointing further
 outward is zeroed (so the charge doesn't keep "pushing" into the wall —

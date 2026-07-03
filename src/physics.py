@@ -36,7 +36,7 @@ class PhysicsEngine:
         self.potential = np.tile(y_lin[:, np.newaxis], (1, width)).astype(np.float64)
         self.grad_x    = np.zeros_like(self.potential)
         self.grad_y    = np.zeros_like(self.potential)
-        self.g_force   = np.zeros_like(self.potential)
+        self.E_magnitude   = np.zeros_like(self.potential)
 
         # Red-Black masks for interior cells
         i_idx, j_idx = np.meshgrid(np.arange(1, height - 1),
@@ -209,7 +209,7 @@ class PhysicsEngine:
 
     def compute_gradients(self) -> None:
         self.grad_y, self.grad_x = np.gradient(self.potential)
-        self.g_force = np.sqrt(self.grad_x ** 2 + self.grad_y ** 2) * self.height
+        self.E_magnitude = np.sqrt(self.grad_x ** 2 + self.grad_y ** 2) * self.height
 
     def compute_isolines(self, data: np.ndarray, n_levels: int) -> np.ndarray:
         d_min, d_max = float(np.min(data)), float(np.max(data))
