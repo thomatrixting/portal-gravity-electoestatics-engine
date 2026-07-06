@@ -25,8 +25,8 @@ def _null_anchors(sim_width, sim_height):
 def test_portals_scene() -> Simulation:
     """A scene with a couple of portals and a material object"""
     W, H = 120, 120
-    p1 = Portal(RectangleMask(40, 80, 30, 30), (255, 0, 0))
-    p2 = Portal(RectangleMask(40, 80, 90, 90), (0, 0, 255))
+    p1 = Portal(RectangleMask(20, 100, 30, 30), (255, 0, 0))
+    p2 = Portal(RectangleMask(20, 100, 90, 90), (0, 0, 255))
 
     obs = MaterialObject(RectangleMask(55,65, 55, 65),
                          color=(80, 220, 120), pinned=False, label="Conductor",active=True)

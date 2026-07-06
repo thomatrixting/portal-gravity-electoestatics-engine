@@ -69,6 +69,7 @@ class Simulation:
         self.fps = fps
 
         self.Y, self.X = np.ogrid[:sim_height, :sim_width]
+        self._bake_movable_masks()
 
         self._engine = PhysicsEngine(
             sim_width, sim_height, self.field, sor_omega=self.sor_omega)
@@ -113,8 +114,8 @@ class Simulation:
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
         self.g_force = self._engine.g_force
-        self._update_material_dynamics()
         self._teleport_material_objects()
+        self._update_material_dynamics()
         self._isolines_dirty = True
 
     def _update_material_dynamics(self) -> None:
@@ -162,9 +163,9 @@ class Simulation:
     def _teleport_material_objects(self) -> None:
         """
         Splits MaterialObjects crossing a portal: the part of the mask
-        overlapping the source portal is removed and reappears (shifted one
-        extra unit along the object's velocity) at the paired portal, while
-        the rest of the object stays put - both pieces remain one object
+        overlapping the source portal is removed and reappears at the paired
+        portal, while the rest of the object stays put - both pieces remain
+        one object
         """
         for obj in self.field:
             if not isinstance(obj, MaterialObject):
@@ -197,46 +198,34 @@ class Simulation:
                     src, dst, intersection = p2, p1, intersect2
 
                 remainder = obj_bool & ~intersection
-                shift_x, shift_y = self._compute_teleport_shift(obj, src, dst)
+                shift_x, shift_y = self._compute_teleport_shift(src, dst)
                 shifted_piece = ArrayMask._shift_grid(intersection, shift_x, shift_y)
                 new_grid = remainder | shifted_piece
 
                 if not np.any(new_grid):
                     break  # defensive: don't assign an empty mask
 
-                if isinstance(obj.mask, ArrayMask):
-                    obj.mask.set(new_grid)
-                else:
-                    obj.mask = ArrayMask(new_grid)
+                obj.mask.set(new_grid)
 
                 self._invalidate_caches()
                 break
 
-    def _compute_teleport_shift(self, obj: "MaterialObject",
-                                 src, dst) -> Tuple[int, int]:
-        """
-        Pixel shift from src's footprint to dst's, plus a 1-unit push along
-        the object's velocity direction so the piece clears the destination
-        portal's thickness instead of landing back on top of it (which would
-        re-trigger a teleport back next frame)
-        """
+    def _compute_teleport_shift(self, src, dst) -> Tuple[int, int]:
+        """Pixel shift from src's footprint center to dst's"""
         sx, sy = src.mask.center
         dxc, dyc = dst.mask.center
-        base_dx, base_dy = dxc - sx, dyc - sy
+        return int(round(dxc - sx)), int(round(dyc - sy))
 
-        speed = (obj.vx ** 2 + obj.vy ** 2) ** 0.5
-        if speed > 1e-6:
-            nx, ny = obj.vx / speed, obj.vy / speed
-        else:
-            # No velocity to take a direction from - fall back to the
-            # src -> dst axis
-            base_len = (base_dx ** 2 + base_dy ** 2) ** 0.5
-            if base_len > 1e-6:
-                nx, ny = base_dx / base_len, base_dy / base_len
-            else:
-                nx, ny = 0.0, 0.0
-
-        return int(round(base_dx + nx)), int(round(base_dy + ny))
+    def _bake_movable_masks(self) -> None:
+        """
+        Replaces MaterialObject/ConductorObject masks with an ArrayMask
+        baked from their current analytic shape, once a coordinate grid
+        exists. No-op for objects already baked.
+        """
+        for obj in self.field:
+            if isinstance(obj, (MaterialObject, ConductorObject)) \
+                    and not isinstance(obj.mask, ArrayMask):
+                obj.mask = ArrayMask(obj.mask(self.X, self.Y))
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""
@@ -672,6 +661,7 @@ class Simulation:
         self._refresh_field()
 
     def _refresh_field(self) -> None:
+        self._bake_movable_masks()
         self._invalidate_caches()
         self._panel.invalidate_tab("SCENE")
 
@@ -687,6 +677,7 @@ class Simulation:
 
     def _load_preset(self, field_objs: list) -> None:
         self.field = field_objs
+        self._bake_movable_masks()
         self._reset_engine()
         self._panel.invalidate_tab("SCENE")
         self._panel.close_inspector()
@@ -777,8 +768,9 @@ class Simulation:
                                 setattr(o, "vx", 0.0),
                                 setattr(o, "vy", 0.0))))
 
-        # Mask
-        if hasattr(obj, "mask"):
+        # Mask (hidden for baked ArrayMask objects - there's no formula left
+        # to expose numerically, only a pixel grid; reposition by dragging)
+        if hasattr(obj, "mask") and not isinstance(obj.mask, ArrayMask):
             w.append(SectionHeader(0, 0, 0, "Mask type"))
             w.append(Button(0, 0, 0, 24, "Rectangle",
                             callback=lambda o=obj: self._change_mask(
@@ -795,6 +787,11 @@ class Simulation:
                                 o, "line"),
                             active_fn=lambda o=obj: isinstance(
                                 o.mask, LineMask)))
+            w.append(Button(0, 0, 0, 24, "Point",
+                            callback=lambda o=obj: self._change_mask(
+                                o, "point"),
+                            active_fn=lambda o=obj: isinstance(
+                                o.mask, PointMask)))
             w += self._mask_widgets(obj)
 
         # Color

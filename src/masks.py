@@ -170,6 +170,32 @@ class RectangleMask(Mask):
 
 
 @dataclass
+class PointMask(Mask):
+    """Single-pixel mask at (x, y)"""
+
+    x: float
+    y: float
+
+    def __call__(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+        return (X == int(round(self.x))) & (Y == int(round(self.y)))
+
+    def __contains__(self, point: Tuple[float, float]) -> bool:
+        px, py = point
+        return abs(px - self.x) < 1.0 and abs(py - self.y) < 1.0
+
+    def translate(self, dx: float, dy: float) -> None:
+        self.x += dx
+        self.y += dy
+
+    @property
+    def center(self) -> Tuple[float, float]:
+        return (self.x, self.y)
+
+    def size(self) -> Optional[Tuple[float, float]]:
+        return (1.0, 1.0)
+
+
+@dataclass
 class PolygonMask(Mask):
     """
     Mask in the shape of an arbitrary polygon
