@@ -14,17 +14,41 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Tuple, TYPE_CHECKING
 
+from masks import RectangleMask
+
 if TYPE_CHECKING:
     from masks import Mask
 
 
 class Portal:
+    """
+    Args:
+        facing_positive: which side of the portal is the "working" (front)
+            face - the side objects normally approach from. True = the
+            positive-axis side (down, for a horizontal band; right, for a
+            vertical band). False = the negative-axis side.
+        back_depth: how far behind the portal (opposite the front face) the
+            "already crossed through" trigger region extends. Large by
+            default so it effectively reaches to the simulation edge.
+        normal_axis: 'x' or 'y' - which axis the front/back split runs
+            along. None = infer from the mask's bounding box (whichever
+            side is thinner is treated as the normal axis); needed only for
+            portals whose bounding box is square (e.g. CircleMask), where
+            that inference is ambiguous.
+    """
+
     def __init__(self, mask: "Mask",
                  color: Tuple[int, int, int],
-                 active: bool = True) -> None:
+                 active: bool = True,
+                 facing_positive: bool = True,
+                 back_depth: float = 1e6,
+                 normal_axis: Optional[str] = None) -> None:
         self.mask   = mask
         self.color  = color
         self.active = active
+        self.facing_positive = facing_positive
+        self.back_depth = back_depth
+        self.normal_axis = normal_axis
 
     def __repr__(self) -> str:
         return f"Portal(mask={self.mask!r}, color={self.color})"
@@ -36,6 +60,38 @@ class Portal:
         if self.active:
             return self.mask(X, Y)
         return np.zeros(X.shape, dtype=bool)
+
+    def back_region_mask(self, X: "np.ndarray", Y: "np.ndarray") -> "np.ndarray":
+        """
+        Boolean grid of the region behind this portal's working face.
+        Anything found here has already fully crossed through the portal
+        (not just touched its mouth) and should be teleported to the
+        paired portal.
+        """
+        if not self.active:
+            return np.zeros(X.shape, dtype=bool)
+
+        size = self.mask.size()
+        if size is None:
+            return np.zeros(X.shape, dtype=bool)
+
+        cx, cy = self.mask.center
+        w, h = size
+        x_min, x_max = cx - w / 2, cx + w / 2
+        y_min, y_max = cy - h / 2, cy + h / 2
+
+        axis = self.normal_axis or ("y" if w >= h else "x")
+        if axis == "y":
+            if self.facing_positive:
+                region = RectangleMask(x_min, x_max, y_min - self.back_depth, y_min)
+            else:
+                region = RectangleMask(x_min, x_max, y_max, y_max + self.back_depth)
+        else:
+            if self.facing_positive:
+                region = RectangleMask(x_min - self.back_depth, x_min, y_min, y_max)
+            else:
+                region = RectangleMask(x_max, x_max + self.back_depth, y_min, y_max)
+        return region(X, Y)
 
 
 class FixedPotentialPortal(Portal):

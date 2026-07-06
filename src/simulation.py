@@ -70,6 +70,7 @@ class Simulation:
         self.fps = fps
 
         self.Y, self.X = np.ogrid[:sim_height, :sim_width]
+        self._bake_movable_masks()
 
         self.solver_mode = solver_mode
 
@@ -161,8 +162,8 @@ class Simulation:
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
         self.g_force = self._engine.g_force
-        self._update_material_dynamics()
         self._teleport_material_objects()
+        self._update_material_dynamics()
         self._isolines_dirty = True
 
     def _update_material_dynamics(self) -> None:
@@ -209,11 +210,22 @@ class Simulation:
 
     def _teleport_material_objects(self) -> None:
         """
-        Splits MaterialObjects crossing a portal: the part of the mask
-        overlapping the source portal is removed and reappears (shifted one
-        extra unit along the object's velocity) at the paired portal, while
-        the rest of the object stays put - both pieces remain one object
+        Splits MaterialObjects crossing a portal: the part of the mask that
+        has fully crossed into a portal's back region (behind its working
+        face, per Portal.facing_positive/back_depth) is removed and
+        reappears at the paired portal, while the rest of the object stays
+        put - both pieces remain one object
         """
+        # Back-region masks only depend on the portals themselves, not on
+        # any particular object - computed once per couple per frame rather
+        # than once per (object, couple) pair
+        back_cache = [
+            (couple_obj.p1, couple_obj.p2,
+             couple_obj.p1.back_region_mask(self.X, self.Y),
+             couple_obj.p2.back_region_mask(self.X, self.Y))
+            for couple_obj, _, _ in self._engine._active_couples_cache or []
+        ]
+
         for obj in self.field:
             if not isinstance(obj, MaterialObject):
                 continue
@@ -224,9 +236,8 @@ class Simulation:
             if not np.any(obj_bool):
                 continue
 
-            for couple_obj, m1, m2 in self._engine._active_couples_cache or []:
-                p1, p2 = couple_obj.p1, couple_obj.p2
-                intersect1, intersect2 = m1 & obj_bool, m2 & obj_bool
+            for p1, p2, back1, back2 in back_cache:
+                intersect1, intersect2 = back1 & obj_bool, back2 & obj_bool
                 has1, has2 = np.any(intersect1), np.any(intersect2)
                 if not has1 and not has2:
                     continue
@@ -245,46 +256,34 @@ class Simulation:
                     src, dst, intersection = p2, p1, intersect2
 
                 remainder = obj_bool & ~intersection
-                shift_x, shift_y = self._compute_teleport_shift(obj, src, dst)
+                shift_x, shift_y = self._compute_teleport_shift(src, dst)
                 shifted_piece = ArrayMask._shift_grid(intersection, shift_x, shift_y)
                 new_grid = remainder | shifted_piece
 
                 if not np.any(new_grid):
                     break  # defensive: don't assign an empty mask
 
-                if isinstance(obj.mask, ArrayMask):
-                    obj.mask.set(new_grid)
-                else:
-                    obj.mask = ArrayMask(new_grid)
+                obj.mask.set(new_grid)
 
                 self._invalidate_caches()
                 break
 
-    def _compute_teleport_shift(self, obj: "MaterialObject",
-                                 src, dst) -> Tuple[int, int]:
-        """
-        Pixel shift from src's footprint to dst's, plus a 1-unit push along
-        the object's velocity direction so the piece clears the destination
-        portal's thickness instead of landing back on top of it (which would
-        re-trigger a teleport back next frame)
-        """
+    def _compute_teleport_shift(self, src, dst) -> Tuple[int, int]:
+        """Pixel shift from src's footprint center to dst's"""
         sx, sy = src.mask.center
         dxc, dyc = dst.mask.center
-        base_dx, base_dy = dxc - sx, dyc - sy
+        return int(round(dxc - sx)), int(round(dyc - sy))
 
-        speed = (obj.vx ** 2 + obj.vy ** 2) ** 0.5
-        if speed > 1e-6:
-            nx, ny = obj.vx / speed, obj.vy / speed
-        else:
-            # No velocity to take a direction from - fall back to the
-            # src -> dst axis
-            base_len = (base_dx ** 2 + base_dy ** 2) ** 0.5
-            if base_len > 1e-6:
-                nx, ny = base_dx / base_len, base_dy / base_len
-            else:
-                nx, ny = 0.0, 0.0
-
-        return int(round(base_dx + nx)), int(round(base_dy + ny))
+    def _bake_movable_masks(self) -> None:
+        """
+        Replaces MaterialObject/ConductorObject masks with an ArrayMask
+        baked from their current analytic shape, once a coordinate grid
+        exists. No-op for objects already baked.
+        """
+        for obj in self.field:
+            if isinstance(obj, (MaterialObject, ConductorObject)) \
+                    and not isinstance(obj.mask, ArrayMask):
+                obj.mask = ArrayMask(obj.mask(self.X, self.Y))
 
     def _invalidate_caches(self) -> None:
         """Invalidates the physics cache and the portal render cache in one call"""
@@ -403,6 +402,44 @@ class Simulation:
 
         return result
 
+    def _render_portal_arrows(self) -> None:
+        """Draws an arrow at each teleport portal's mouth pointing toward
+        its working (front) side"""
+        ps = self.px_scale
+        arrow_len = 6.0   # grid units
+        head_len = arrow_len * ps * 0.35
+        lw = max(1, int(ps * 0.4))
+
+        portals: list = []
+        for obj in self.field:
+            if isinstance(obj, CouplePortal):
+                portals += [obj.p1, obj.p2]
+            elif isinstance(obj, MultiPortal):
+                portals += list(obj.args)
+
+        for p in portals:
+            if not p.active:
+                continue
+            size = p.mask.size()
+            if size is None:
+                continue
+            cx, cy = p.mask.center
+            w, h = size
+            axis = p.normal_axis or ("y" if w >= h else "x")
+            if axis == "y":
+                dx, dy = 0.0, (1.0 if p.facing_positive else -1.0)
+            else:
+                dx, dy = (1.0 if p.facing_positive else -1.0), 0.0
+
+            sx, sy = cx * ps, cy * ps
+            ex, ey = sx + dx * arrow_len * ps, sy + dy * arrow_len * ps
+
+            pygame.draw.line(self.sim_surface, p.color, (sx, sy), (ex, ey), lw)
+            angle = np.arctan2(dy, dx)
+            for wa in (angle + 2.618, angle - 2.618):
+                pygame.draw.line(self.sim_surface, p.color, (ex, ey),
+                                 (ex + np.cos(wa) * head_len,
+                                  ey + np.sin(wa) * head_len), lw)
 
     def _render_vectors(self) -> None:
         """Vector field"""
@@ -458,6 +495,7 @@ class Simulation:
         self._render_field()
         self._render_isolines()
         self._render_portals()
+        self._render_portal_arrows()
         self._render_vectors()
         self.screen.blit(self.sim_surface, (0, 0))
         self._panel.draw(self.screen, self._fonts)
@@ -720,6 +758,7 @@ class Simulation:
         self._refresh_field()
 
     def _refresh_field(self) -> None:
+        self._bake_movable_masks()
         self._invalidate_caches()
         self._panel.invalidate_tab("SCENE")
 
@@ -735,13 +774,18 @@ class Simulation:
 
     def _load_preset(self, field_objs: list) -> None:
         self.field = field_objs
+        self._bake_movable_masks()
         self._reset_engine()
         self._panel.invalidate_tab("SCENE")
         self._panel.close_inspector()
 
     def _preset_couple_portals(self) -> None:
-        p1 = Portal(RectangleMask(25, 75, 25, 26), (255, 153, 0))
-        p2 = Portal(RectangleMask(25, 75, 74, 75), (0, 204, 255))
+        # p1 sits near the top wall - front faces down (into the domain);
+        # p2 sits near the bottom wall - front faces up
+        p1 = Portal(RectangleMask(25, 75, 25, 26), (255, 153, 0),
+                    facing_positive=True)
+        p2 = Portal(RectangleMask(25, 75, 74, 75), (0, 204, 255),
+                    facing_positive=False)
         a_hi = PotentialAnchor(RectangleMask(0, self.sim_width, 0, 1),   1.0)
         a_lo = PotentialAnchor(RectangleMask(0, self.sim_width,
                                              self.sim_height-1,
@@ -749,9 +793,13 @@ class Simulation:
         self._load_preset([a_hi, a_lo, CouplePortal(p1, p2)])
 
     def _preset_couple_circles(self) -> None:
-        p1 = Portal(CircleMask(35, self.sim_height//2, 10), (255, 100, 50))
+        # Circles have a square bounding box, so the front/back axis can't
+        # be inferred from shape - set it explicitly. p1 sits near the left
+        # wall (front faces right); p2 near the right wall (front faces left)
+        p1 = Portal(CircleMask(35, self.sim_height//2, 10), (255, 100, 50),
+                    facing_positive=True, normal_axis="x")
         p2 = Portal(CircleMask(self.sim_width-35, self.sim_height//2, 10),
-                    (50, 200, 255))
+                    (50, 200, 255), facing_positive=False, normal_axis="x")
         a_hi = PotentialAnchor(RectangleMask(0, self.sim_width, 0, 1),   1.0)
         a_lo = PotentialAnchor(RectangleMask(0, self.sim_width,
                                              self.sim_height-1,
@@ -825,8 +873,9 @@ class Simulation:
                                 setattr(o, "vx", 0.0),
                                 setattr(o, "vy", 0.0))))
 
-        # Mask
-        if hasattr(obj, "mask"):
+        # Mask (hidden for baked ArrayMask objects - there's no formula left
+        # to expose numerically, only a pixel grid; reposition by dragging)
+        if hasattr(obj, "mask") and not isinstance(obj.mask, ArrayMask):
             w.append(SectionHeader(0, 0, 0, "Mask type"))
             w.append(Button(0, 0, 0, 24, "Rectangle",
                             callback=lambda o=obj: self._change_mask(
@@ -843,6 +892,11 @@ class Simulation:
                                 o, "line"),
                             active_fn=lambda o=obj: isinstance(
                                 o.mask, LineMask)))
+            w.append(Button(0, 0, 0, 24, "Point",
+                            callback=lambda o=obj: self._change_mask(
+                                o, "point"),
+                            active_fn=lambda o=obj: isinstance(
+                                o.mask, PointMask)))
             w += self._mask_widgets(obj)
 
         # Color
