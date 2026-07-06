@@ -32,8 +32,8 @@ from scenes import *
 
 def main() -> None:
     #sim = vertical_portals_many_objects_scene()
-    #sim = test_portals_scene()  
-    sim = example_portal_on_capacitor()
+    sim = test_portals_scene()  
+    #sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
     sim.run()

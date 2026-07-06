@@ -162,11 +162,22 @@ class Simulation:
 
     def _teleport_material_objects(self) -> None:
         """
-        Splits MaterialObjects crossing a portal: the part of the mask
-        overlapping the source portal is removed and reappears at the paired
-        portal, while the rest of the object stays put - both pieces remain
-        one object
+        Splits MaterialObjects crossing a portal: the part of the mask that
+        has fully crossed into a portal's back region (behind its working
+        face, per Portal.facing_positive/back_depth) is removed and
+        reappears at the paired portal, while the rest of the object stays
+        put - both pieces remain one object
         """
+        # Back-region masks only depend on the portals themselves, not on
+        # any particular object - computed once per couple per frame rather
+        # than once per (object, couple) pair
+        back_cache = [
+            (couple_obj.p1, couple_obj.p2,
+             couple_obj.p1.back_region_mask(self.X, self.Y),
+             couple_obj.p2.back_region_mask(self.X, self.Y))
+            for couple_obj, _, _ in self._engine._active_couples_cache or []
+        ]
+
         for obj in self.field:
             if not isinstance(obj, MaterialObject):
                 continue
@@ -177,9 +188,8 @@ class Simulation:
             if not np.any(obj_bool):
                 continue
 
-            for couple_obj, m1, m2 in self._engine._active_couples_cache or []:
-                p1, p2 = couple_obj.p1, couple_obj.p2
-                intersect1, intersect2 = m1 & obj_bool, m2 & obj_bool
+            for p1, p2, back1, back2 in back_cache:
+                intersect1, intersect2 = back1 & obj_bool, back2 & obj_bool
                 has1, has2 = np.any(intersect1), np.any(intersect2)
                 if not has1 and not has2:
                     continue
@@ -344,6 +354,44 @@ class Simulation:
 
         return result
 
+    def _render_portal_arrows(self) -> None:
+        """Draws an arrow at each teleport portal's mouth pointing toward
+        its working (front) side"""
+        ps = self.px_scale
+        arrow_len = 6.0   # grid units
+        head_len = arrow_len * ps * 0.35
+        lw = max(1, int(ps * 0.4))
+
+        portals: list = []
+        for obj in self.field:
+            if isinstance(obj, CouplePortal):
+                portals += [obj.p1, obj.p2]
+            elif isinstance(obj, MultiPortal):
+                portals += list(obj.args)
+
+        for p in portals:
+            if not p.active:
+                continue
+            size = p.mask.size()
+            if size is None:
+                continue
+            cx, cy = p.mask.center
+            w, h = size
+            axis = p.normal_axis or ("y" if w >= h else "x")
+            if axis == "y":
+                dx, dy = 0.0, (1.0 if p.facing_positive else -1.0)
+            else:
+                dx, dy = (1.0 if p.facing_positive else -1.0), 0.0
+
+            sx, sy = cx * ps, cy * ps
+            ex, ey = sx + dx * arrow_len * ps, sy + dy * arrow_len * ps
+
+            pygame.draw.line(self.sim_surface, p.color, (sx, sy), (ex, ey), lw)
+            angle = np.arctan2(dy, dx)
+            for wa in (angle + 2.618, angle - 2.618):
+                pygame.draw.line(self.sim_surface, p.color, (ex, ey),
+                                 (ex + np.cos(wa) * head_len,
+                                  ey + np.sin(wa) * head_len), lw)
 
     def _render_vectors(self) -> None:
         """Vector field"""
@@ -399,6 +447,7 @@ class Simulation:
         self._render_field()
         self._render_isolines()
         self._render_portals()
+        self._render_portal_arrows()
         self._render_vectors()
         self.screen.blit(self.sim_surface, (0, 0))
         self._panel.draw(self.screen, self._fonts)
@@ -683,8 +732,12 @@ class Simulation:
         self._panel.close_inspector()
 
     def _preset_couple_portals(self) -> None:
-        p1 = Portal(RectangleMask(25, 75, 25, 26), (255, 153, 0))
-        p2 = Portal(RectangleMask(25, 75, 74, 75), (0, 204, 255))
+        # p1 sits near the top wall - front faces down (into the domain);
+        # p2 sits near the bottom wall - front faces up
+        p1 = Portal(RectangleMask(25, 75, 25, 26), (255, 153, 0),
+                    facing_positive=True)
+        p2 = Portal(RectangleMask(25, 75, 74, 75), (0, 204, 255),
+                    facing_positive=False)
         a_hi = PotentialAnchor(RectangleMask(0, self.sim_width, 0, 1),   1.0)
         a_lo = PotentialAnchor(RectangleMask(0, self.sim_width,
                                              self.sim_height-1,
@@ -692,9 +745,13 @@ class Simulation:
         self._load_preset([a_hi, a_lo, CouplePortal(p1, p2)])
 
     def _preset_couple_circles(self) -> None:
-        p1 = Portal(CircleMask(35, self.sim_height//2, 10), (255, 100, 50))
+        # Circles have a square bounding box, so the front/back axis can't
+        # be inferred from shape - set it explicitly. p1 sits near the left
+        # wall (front faces right); p2 near the right wall (front faces left)
+        p1 = Portal(CircleMask(35, self.sim_height//2, 10), (255, 100, 50),
+                    facing_positive=True, normal_axis="x")
         p2 = Portal(CircleMask(self.sim_width-35, self.sim_height//2, 10),
-                    (50, 200, 255))
+                    (50, 200, 255), facing_positive=False, normal_axis="x")
         a_hi = PotentialAnchor(RectangleMask(0, self.sim_width, 0, 1),   1.0)
         a_lo = PotentialAnchor(RectangleMask(0, self.sim_width,
                                              self.sim_height-1,

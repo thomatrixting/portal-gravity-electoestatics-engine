@@ -24,11 +24,15 @@ def _null_anchors(sim_width, sim_height):
 
 def test_portals_scene() -> Simulation:
     """A scene with a couple of portals and a material object"""
-    W, H = 120, 120
-    p1 = Portal(RectangleMask(20, 100, 30, 30), (255, 0, 0))
-    p2 = Portal(RectangleMask(20, 100, 90, 90), (0, 0, 255))
+    W, H = 500, 500
+    cx = W // 2
+    cy = H // 2
+    d = 100
+    r = 10
+    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
 
-    obs = MaterialObject(RectangleMask(55,65, 55, 65),
+    obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
                          color=(80, 220, 120), pinned=False, label="Conductor",active=True)
     #self._add_material("Cube",
     #                        RectangleMask, (180, 180, 180))
@@ -36,7 +40,7 @@ def test_portals_scene() -> Simulation:
     return Simulation(
         *_anchors(W, H), CouplePortal(p1, p2), obs,
         sim_width=W, sim_height=H,
-        px_scale=6,
+        px_scale=2,
         iterations_per_frame=50,
         sor_omega=1.8,
         isoline_count=15,
@@ -48,8 +52,8 @@ def vertical_portals_many_objects_scene() -> Simulation:
     down) and a grid of many small material objects falling between them
     """
     W, H = 220, 120
-    p1 = Portal(RectangleMask(130, 180,30, 30), (255, 0, 0))
-    p2 = Portal(RectangleMask(30, 80,90, 90), (0, 0, 255))
+    p1 = Portal(RectangleMask(130, 180,30, 30), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(30, 80,90, 90), (0, 0, 255), facing_positive=False)
 
     objs = []
     rows, cols = 10, 10
@@ -109,8 +113,8 @@ def example_couple_portals() -> Simulation:
     """Two parallel portals"""
     #W, H = 120, 120
     W,H = 200,250
-    p1 = Portal(RectangleMask(40, 80, 40, 40), color=(255, 153, 0))
-    p2 = Portal(RectangleMask(40, 80, 80, 80), color=(0, 204, 255))
+    p1 = Portal(RectangleMask(40, 80, 40, 40), color=(255, 153, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(40, 80, 80, 80), color=(0, 204, 255), facing_positive=False)
 
     return Simulation(
         *_anchors(W, H), CouplePortal(p1, p2),
@@ -141,8 +145,10 @@ def example_advanced() -> Simulation:
 def example_couple_circles() -> Simulation:
     """Two circular portals"""
     W, H = 120, 100
-    p1 = Portal(CircleMask(cx=35, cy=50, radius=10), color=(255, 100, 50))
-    p2 = Portal(CircleMask(cx=85, cy=50, radius=10), color=(50, 200, 255))
+    p1 = Portal(CircleMask(cx=35, cy=50, radius=10), color=(255, 100, 50),
+                facing_positive=True, normal_axis="x")
+    p2 = Portal(CircleMask(cx=85, cy=50, radius=10), color=(50, 200, 255),
+                facing_positive=False, normal_axis="x")
 
     return Simulation(
         *_anchors(W, H), CouplePortal(p1, p2),
