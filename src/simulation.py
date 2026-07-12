@@ -152,6 +152,13 @@ class Simulation:
 
     def update_physics(self) -> None:
         if self.solver_mode == "mom":
+            # MOM never calls engine.step()/run_steps(), so the engine's
+            # portal/material mask cache (built lazily inside step()) is
+            # never populated - rebuild it by hand so teleport can see it
+            if self._engine._cache_dirty:
+                self._engine._rebuild_cache()
+            self._teleport_material_objects()
+            self._update_material_dynamics()
             return  # MOM ya resolvió en setup, no hay iteraciones
         self._engine.sor_omega = self.sor_omega
         self.diff = self._engine.run_steps(

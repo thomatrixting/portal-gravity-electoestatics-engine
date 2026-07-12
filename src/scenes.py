@@ -22,9 +22,22 @@ def _null_anchors(sim_width, sim_height):
         PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
     ]
 
+def test_portals_scene_mom() -> Simulation:
+    W, H = 80, 80
+    top    = PotentialAnchor(RectangleMask(0, W, 0, 1),      1.0)
+    bottom = PotentialAnchor(RectangleMask(0, W, H-1, H),    0.0)
+    cond   = PotentialAnchor(CircleMask(W//2, H//2, 10),     0.5)  # conductor como anchor
+    return Simulation(
+        top, bottom, cond,
+        sim_width=W, sim_height=H,
+        px_scale=5,
+        solver_mode="mom",
+        show_isolines=True,
+    )
+
 def test_portals_scene() -> Simulation:
     """A scene with a couple of portals and a material object"""
-    W, H = 500, 500
+    W, H = 500,500
     cx = W // 2
     cy = H // 2
     d = 100
@@ -44,6 +57,7 @@ def test_portals_scene() -> Simulation:
         iterations_per_frame=50,
         sor_omega=1.8,
         isoline_count=15,
+        solver_mode="mom"
     )
 
 def vertical_portals_many_objects_scene() -> Simulation:
