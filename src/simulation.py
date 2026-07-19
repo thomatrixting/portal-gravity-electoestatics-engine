@@ -149,7 +149,7 @@ class Simulation:
         self._engine.compute_gradients()
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.g_force = self._engine.g_force
+        self.E_magnitude = self._engine.E_magnitude
         self.diff = 0.0
 
     def update_physics(self) -> None:
