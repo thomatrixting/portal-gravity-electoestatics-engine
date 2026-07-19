@@ -119,7 +119,6 @@ class Simulation:
         self._update_material_dynamics()
         self._teleport_material_objects()
         self._update_test_charges()
-        self._update_material_dynamics()
         self._isolines_dirty = True
 
     def _update_material_dynamics(self) -> None:
@@ -222,7 +221,43 @@ class Simulation:
                 obj.mask.set(new_grid)
 
                 self._invalidate_caches()
+
+                
                 break
+        # ---- TestCharge teleportation ----
+        for q in self.test_charges:
+            if not q.active:
+                continue
+
+            for p1, p2, back1, back2 in back_cache:
+                xi = max(0, min(back1.shape[1] - 1, int(round(q.x))))
+                yi = max(0, min(back1.shape[0] - 1, int(round(q.y))))
+
+                in1 = bool(back1[yi, xi])
+                in2 = bool(back2[yi, xi])
+
+                if not in1 and not in2:
+                    continue
+
+                shift_x, shift_y = self._compute_teleport_shift(
+                    p1, p2) if in1 else self._compute_teleport_shift(p2, p1)
+
+                q.x = max(0.0, min(self.sim_width  - 1.0, q.x + shift_x))
+                q.y = max(0.0, min(self.sim_height - 1.0, q.y + shift_y))
+
+                # empujar un paso en dirección de la velocidad para
+                # evitar re-teletransportación en el frame siguiente
+                speed = (q.vx**2 + q.vy**2) ** 0.5
+                if speed > 1e-6:
+                    q.x = max(0.0, min(self.sim_width  - 1.0,
+                                       q.x + q.vx / speed * 2.0))
+                    q.y = max(0.0, min(self.sim_height - 1.0,
+                                       q.y + q.vy / speed * 2.0))
+
+                q._initialized_accel = False
+                q.reset_trail()
+                break
+            
 
     def _compute_teleport_shift(self, src, dst) -> Tuple[int, int]:
         """Pixel shift from src's footprint center to dst's"""
