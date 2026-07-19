@@ -200,18 +200,21 @@ class MaterialObject:
                  pinned: bool = False,
                  label: str = "Object",
                  mass: float = 1.0,
+                 charge: float = 1.0,
                  active: bool = True) -> None:
         self.mask   = mask
         self.color  = color
         self.pinned = pinned
         self.label  = label
         self.mass   = float(mass)
+        self.charge = float(charge)
         self.active = active
         self.vx: float = 0.0
         self.vy: float = 0.0
 
     def __repr__(self) -> str:
-        return f"MaterialObject({self.label!r}, pinned={self.pinned}, mask={self.mask!r})"
+        return (f"MaterialObject({self.label!r}, pinned={self.pinned}, "
+                f"charge={self.charge}, mask={self.mask!r})")
 
     def __contains__(self, point: Tuple[float, float]) -> bool:
         return self.active and not self.pinned and (point in self.mask)

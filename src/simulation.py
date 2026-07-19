@@ -137,8 +137,9 @@ class Simulation:
                 continue
 
             # Average gradient value inside the object
-            fx = float(-np.mean(self.grad_x[mask]) / obj.mass)
-            fy = float(-np.mean(self.grad_y[mask]) / obj.mass)
+            qm = obj.charge / obj.mass
+            fx = float(-qm * np.mean(self.grad_x[mask]))
+            fy = float(-qm * np.mean(self.grad_y[mask]))
 
             if self.damping:
                 # Damping factor to prevent oscillations
@@ -958,6 +959,10 @@ class Simulation:
             w.append(Toggle(0, 0, 0, "Pinned",
                             getter=lambda o=obj: o.pinned,
                             setter=lambda v, o=obj: setattr(o, "pinned", v)))
+            w.append(Stepper(0, 0, 0, "Charge q",
+                             getter=lambda o=obj: o.charge,
+                             setter=lambda v, o=obj: setattr(o, "charge", round(v, 2)),
+                             step=0.01, fmt="{:.2f}", min_val=-10.0, max_val=10.0))
             w.append(Stepper(0, 0, 0, "Mass",
                              getter=lambda o=obj: o.mass,
                              setter=lambda v, o=obj: setattr(o, "mass", max(0.1, v)),
