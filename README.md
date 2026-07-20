@@ -1,143 +1,147 @@
-# Portal Gravity Engine
+# Portal Electric Potential Engine
 
-**NOTE: If you prefer to read in English, please open the en_README.md file.**
+A 2D interactive simulation of electric potential with portals. The engine solves the Laplace equation for the electric potential using either the **Method of Moments (MOM)** with point matching or **Successive Over-Relaxation (SOR)**. See `/explanation/report.pdf` for the full derivation.
 
-Интерактивная симуляция потенциального поля. Решает уравнение Лапласа методом SOR (Successive Over-Relaxation). Подробнее в examples/explanation.pdf
+The engine ships with a `pygame` UI for building and interacting with a scene: potential anchors, boundaries (Dirichlet or Neumann), and portals. It also simulates the effect of the resulting field on material objects and test charges, so the hypothetical effects of a portal on electric potential can be observed directly. A set of premade scenarios is included to demonstrate this.
 
-Можно расставлять якоря, порталы, препятствия на сетке и наблюдать за результатом.
+## Objectives and Methodology
 
-Проект был сделан больше для экспериментов с новым методом вычисления - Black-Red SOR, чем для общих экспериментов с порталами.
+This project was built for the final assignment of the Electrodynamics course at the National University of Colombia, taught by Ph.D. Juan Domingo Baena. The goal is to analyze how a hypothetical portal would affect electric potential, under a set of axioms detailed in `/explanation/report.pdf`.
+
+It builds on and extends the work of @ZinCin, adapting it to an electrostatics context by adding the MOM solver and new object classes.
+
+The physics engine follows an object-oriented design, with the `pygame` UI layered on top for interaction; the simulation can also run headless, without the UI. Aside from portals, objects behave as they would in any potential-field simulation: boundaries, fixed potentials, and conductors affect the field by imposing a condition on the pixels they occupy, while material objects and test charges simply move along the gradient without affecting the potential themselves — modeling that feedback would require electrodynamics effects outside the scope of this simulation.
+
+Portals are handled differently depending on the solver. Under SOR, which re-evaluates the field every iteration, each portal's potential is set to the average of its paired portal's pixels on every step. Under MOM, both portals in a pair are instead assigned a shared, unknown potential that the linear system solves for directly. For interaction with material objects and test charges, each portal has a region on one side that acts as its teleport trigger: any part of an object entering that region reappears at the paired portal. Portals are therefore one-directional for teleportation purposes, which is sufficient for the scope of this project.
 
 <img width="1213" height="749" alt="изображение" src="https://github.com/user-attachments/assets/c9d2846c-b941-43e8-99c8-67707d9a2044" />
 
 ---
 
-## Содержание
+## Table of Contents
 
-- [Быстрый старт](#быстрый-старт)
-- [Физика](#физика)
-- [Архитектура проекта](#архитектура-проекта)
-- [Объекты поля](#объекты-поля)
-- [Маски](#маски)
-- [Параметры Simulation](#параметры-simulation)
-- [Управление](#управление)
-- [Цветовые схемы](#цветовые-схемы)
-- [Написание сцен](#написание-сцен)
+- [Quick Start](#quick-start)
+- [Physics](#physics)
+- [Project Architecture](#project-architecture)
+- [Field Objects](#field-objects)
+- [Masks](#masks)
+- [Simulation Parameters](#simulation-parameters)
+- [Controls](#controls)
+- [Color Schemes](#color-schemes)
+- [Writing Scenes](#writing-scenes)
 
 ---
 
-## Быстрый старт
+## Quick Start
 
-Если хотите просто протестировать программу – зайдите в Release и скачайте последний релиз
+**Requirements:** Python 3.9+, numpy 2.0.2+, pygame 2.6.1+
 
-**Требования:** Python 3.9+, numpy 2.0.2+, pygame 2.6.1+
-
-**Для обычного запуска склонируйте репозиторий (или папку ./src), а затем в папку ./src запустите файл main.py**
+**To run normally, clone the repository (or just the `./src` folder), then launch `main.py` from the `./src` directory:**
 
 ```bash
 pip install numpy pygame
 python main.py
 ```
 
-Для запуска другой сцены откройте `main.py` и раскомментируйте нужную строку:
+To run a different scene, open `main.py` and uncomment the desired line:
 
 ```python
 def main() -> None:
-    sim = example_couple_portals()   # <- активная сцена
+    sim = example_couple_portals()   # <- active scene
     # sim = example_advanced()
     # sim = example_couple_circles()
     sim.run()
 ```
 
-или смените сцену в инспекторе
+or switch the scene in the inspector.
 
 ---
 
-## Физика
+## Physics
 
-Симуляция решает уравнение Лапласа:
+The simulation solves the Laplace equation:
 
 ```
 ∇²φ = 0
 ```
 
-Метод: **Red-Black Gauss-Seidel SOR** — чередуются «красные» и «чёрные» ячейки шахматной доски, что вдвое ускоряет сходимость по сравнению с простым Якоби.
+Method: **Red-Black Gauss-Seidel SOR** — alternates between "red" and "black" checkerboard cells, which doubles convergence speed compared to plain Jacobi.
 
-### Граничные условия
+### Boundary Conditions
 
-| Граница | Тип | Значение |
+| Boundary | Type | Value |
 |---|---|---|
-| Верх сетки | Дирихле | φ = 1.0 |
-| Низ сетки | Дирихле | φ = 0.0 |
-| Левая / правая | Нейман | ∂φ/∂n = 0 |
+| Top of grid | Dirichlet | φ = 1.0 |
+| Bottom of grid | Dirichlet | φ = 0.0 |
+| Left / right | Neumann | ∂φ/∂n = 0 |
 
-Верхняя и нижняя грани — постоянный источник и сток. Боковые границы прозрачны: поле свободно вытекает влево и вправо. (Это реализует гравитацию, схожую с земной)
+The top and bottom edges are constant source and sink. The side boundaries are transparent: the field flows freely left and right. (This implements gravity similar to Earth's.)
 
-### Начальное состояние
+### Initial State
 
-Потенциал инициализируется линейным градиентом φ = 1 (верх) -> 0 (низ). Это точное решение Лапласа при выбранных граничных условиях, поэтому без объектов поле не изменится. Объекты создают постоянные отклонения от этого фона.
+The potential is initialized with a linear gradient φ = 1 (top) → 0 (bottom). This is the exact solution to Laplace's equation under the chosen boundary conditions, so without any objects the field will not change. Objects create permanent deviations from this background.
 
-### Параметр ω (SOR)
+### Parameter ω (SOR)
 
-Управляет скоростью сходимости:
+Controls convergence speed:
 
-- `ω = 1.0` - медленная, но точная сходимость
-- `ω = 1.5–1.9` - быстрая, но менее точная
-- `ω → 2.0` - почти мгновенная, но неустойчивая
-
----
-
-## Архитектура проекта
-
-```
-main.py          — точка входа
-scenes.py        — готовые сцены (примеры, которые могут показать принцип работы порталов)
-simulation.py    — главный класс, игровой цикл, рендеринг, UI
-physics.py       — SOR-решатель
-portals.py       — классы объектов поля
-masks.py         — геометрические маски
-colors.py        — цветовые схемы
-ui.py            — виджеты боковой панели
-```
-
-> `physics.py` не зависит от Pygame, для отдельных тестов
+- `ω = 1.0` — slow but accurate convergence
+- `ω = 1.5–1.9` — fast but less accurate
+- `ω → 2.0` — near-instant but unstable
 
 ---
 
-## Объекты поля
+## Project Architecture
 
-Все объекты передаются в `Simulation(*field, ...)` в любом порядке и количестве.
+```
+main.py          — entry point
+scenes.py        — predefined scenes (examples demonstrating how portals work)
+simulation.py    — main class, game loop, rendering, UI
+physics.py       — SOR solver
+portals.py       — field object classes
+masks.py         — geometric masks
+colors.py        — color schemes
+ui.py            — sidebar widgets
+```
+
+> `physics.py` has no Pygame dependency, for use in standalone tests.
+
+---
+
+## Field Objects
+
+All objects are passed into `Simulation(*field, ...)` in any order and quantity.
 
 ---
 
 ### `PotentialAnchor(mask, potential_value)`
 
-Якорь: жёстко фиксирует потенциал в своей области и удерживает его постоянно. Создаёт источник или сток поля в произвольном месте сетки.
+An anchor: rigidly fixes the potential in its area and holds it constant. Creates a field source or sink at an arbitrary point on the grid.
 
 ```python
-# Источник в центре сверху
+# Source at center-top
 PotentialAnchor(CircleMask(60, 20, 5), potential_value=1.0)
 
-# Сток в центре снизу
+# Sink at center-bottom
 PotentialAnchor(CircleMask(60, 80, 5), potential_value=0.0)
 ```
 
-Якорь с φ выше фонового создаёт горку градиента потенциала, с φ ниже — яму на градиенте. Поле убывает от якоря по всем направлениям согласно уравнению Лапласа.
+An anchor with φ above the background creates a potential gradient hill; with φ below — a potential gradient valley. The field decays from the anchor in all directions according to the Laplace equation.
 
-**Параметры:**
+**Parameters:**
 
-| Параметр | Тип | Описание |
+| Parameter | Type | Description |
 |---|---|---|
-| `mask` | `Mask` | Форма области якоря |
-| `potential_value` | `float` | Фиксированное значение φ ∈ [0, 1] |
-| `color` | `tuple` | RGB-цвет |
-| `active` | `bool` | Включён/выключен |
+| `mask` | `Mask` | Shape of the anchor area |
+| `potential_value` | `float` | Fixed φ value ∈ [0, 1] |
+| `color` | `tuple` | RGB color |
+| `active` | `bool` | Enabled / disabled |
 
 ---
 
 ### `FixedPotentialPortal(mask, potential_value)`
 
-Функционально идентичен `PotentialAnchor` — фиксирует потенциал в своей области. Используется для экранирования потенциала
+Functionally identical to `PotentialAnchor` — fixes the potential in its area. Used for potential shielding.
 
 ```python
 FixedPotentialPortal(RectangleMask(20, 100, 30, 33), potential_value=0.8)
@@ -147,7 +151,7 @@ FixedPotentialPortal(RectangleMask(20, 100, 30, 33), potential_value=0.8)
 
 ### `CouplePortal(p1, p2)`
 
-Пара связанных порталов с **одинаковым потенциалом**. На каждом шаге потенциал по всей связанной области усредняется.
+A pair of linked portals with **equal potential**. At each step, the potential across the entire linked area is averaged.
 
 ```python
 p1 = Portal(RectangleMask(25, 75, 25, 26), color=(255, 153, 0))
@@ -157,7 +161,7 @@ couple = CouplePortal(p1, p2)
 
 ### `MultiPortal((p1, p2, p3, ...))`
 
-Несколько связанных порталов с **одинаковым потенциалом**. На каждом шаге потенциал по всей связанной области усредняется.
+A few of linked portals with **equal potential**. At each step, the potential across the entire linked area is averaged.
 
 ```python
 p1 = Portal(RectangleMask(40, 60, 30, 30), (255, 0, 0))
@@ -166,22 +170,22 @@ p3 = Portal(RectangleMask(40, 60, 90, 90), (0, 0, 255))
 multi = MultiPortal((p1, p2, p3))
 ```
 
-**Параметры `Portal`:**
+**`Portal` Parameters:**
 
-| Параметр | Тип | Описание |
+| Parameter | Type | Description |
 |---|---|---|
-| `mask` | `Mask` | Форма портала |
-| `color` | `tuple` | RGB-цвет |
-| `active` | `bool` | Включён/выключен |
+| `mask` | `Mask` | Shape of the portal |
+| `color` | `tuple` | RGB color |
+| `active` | `bool` | Enabled / disabled |
 
 ---
 
 ### `MaterialObject(mask, ...)`
 
-Твёрдое препятствие. Ячейки внутри **исключены из SOR**. Т.е. поле огибает объект снаружи. Потенциал внутри фиксируется начальным значением и не обновляется.
+A solid obstacle. Cells inside are **excluded from SOR** — the field wraps around the object from outside. The potential inside is fixed at the initial value and is not updated.
 
 ```python
-# Неподвижный куб
+# Pinned block
 MaterialObject(
     RectangleMask(40, 80, 40, 60),
     color=(180, 180, 180),
@@ -189,7 +193,7 @@ MaterialObject(
     label="Block"
 )
 
-# Свободный шар
+# Free-floating ball
 MaterialObject(
     CircleMask(cx=60, cy=50, radius=8),
     pinned=False,
@@ -197,22 +201,22 @@ MaterialObject(
 )
 ```
 
-**Параметры:**
+**Parameters:**
 
-| Параметр | Тип | По умолчанию | Описание |
+| Parameter | Type | Default | Description |
 |---|---|---|---|
-| `mask` | `Mask` | — | Форма объекта |
-| `color` | `tuple` | `(180, 180, 180)` | RGB-цвет |
-| `pinned` | `bool` | `False` | Если `True` нельзя перетащить |
-| `label` | `str` | `"Object"` | Имя в UI |
-| `mass` | `float` | `1.0` | Масса |
-| `active` | `bool` | `True` | Включён/выключен |
+| `mask` | `Mask` | — | Shape of the object |
+| `color` | `tuple` | `(180, 180, 180)` | RGB color |
+| `pinned` | `bool` | `False` | If `True`, cannot be dragged |
+| `label` | `str` | `"Object"` | Name in UI |
+| `mass` | `float` | `1.0` | Mass |
+| `active` | `bool` | `True` | Enabled / disabled |
 
 ---
 
 ### `ConductorObject(mask, ...)`
 
-Плавающий проводник. На каждом шаге потенциал внутри объекта выравнивается по среднему потенциалу внешних соседних ячеек. Создаёт характерное для проводника искажение силовых линий.
+A floating conductor. At each step, the potential inside the object is equalized to the average potential of its outer neighboring cells. Creates the field-line distortion characteristic of a conductor.
 
 ```python
 ConductorObject(
@@ -223,19 +227,19 @@ ConductorObject(
 )
 ```
 
-Параметры аналогичны `MaterialObject`.
+Parameters are identical to `MaterialObject`.
 
 ---
 
-## Маски
+## Masks
 
-Маски определяют геометрическую форму объекта на сетке симуляции. Любой объект принимает любую маску.
+Masks define the geometric shape of an object on the simulation grid. Any object accepts any mask.
 
 ### `RectangleMask(x_min, x_max, y_min, y_max)`
 
 ```python
-RectangleMask(10, 90, 20, 21)   # тонкая горизонтальная полоса
-RectangleMask(0, 120, 0, 1)     # якорь по всему верхнему краю
+RectangleMask(10, 90, 20, 21)   # thin horizontal strip
+RectangleMask(0, 120, 0, 1)     # anchor along the entire top edge
 ```
 
 ### `CircleMask(cx, cy, radius)`
@@ -246,7 +250,7 @@ CircleMask(cx=60, cy=50, radius=15)
 
 ### `PointMask(x, y)`
 
-Одна ячейка сетки.
+A single grid cell.
 
 ```python
 PointMask(60, 50)
@@ -254,7 +258,7 @@ PointMask(60, 50)
 
 ### `LineMask(x1, y1, x2, y2, thickness)`
 
-Отрезок между двумя точками с заданной толщиной.
+A line segment between two points with a given thickness.
 
 ```python
 LineMask(10, 10, 110, 90, thickness=2.0)
@@ -262,112 +266,112 @@ LineMask(10, 10, 110, 90, thickness=2.0)
 
 ### `PolygonMask([(x0,y0), (x1,y1), ...])`
 
-Произвольный многоугольник.
+An arbitrary polygon.
 
 ```python
-PolygonMask([(30, 20), (90, 20), (60, 80)])  # треугольник
+PolygonMask([(30, 20), (90, 20), (60, 80)])  # triangle
 ```
 
-### `FunctionMask("выражение")`
+### `FunctionMask("expression")`
 
-Маска, заданная произвольным выражением (функцией). Переменные: `x`, `y`, `np`. Выражение должно возвращать булев скаляр или массив.
+A mask defined by an arbitrary expression (function). Variables: `x`, `y`, `np`. The expression must return a boolean scalar or array.
 
 ```python
-FunctionMask("(x - 60)**2 + (y - 50)**2 < 15**2") # круг
-FunctionMask("np.abs(x - 60) < 5")т # вертикальная полоса
-FunctionMask("(x > 30) & (x < 90) & (y > 40) & (y < 60)")  # прямоугольник
+FunctionMask("(x - 60)**2 + (y - 50)**2 < 15**2")  # circle
+FunctionMask("np.abs(x - 60) < 5")                  # vertical strip
+FunctionMask("(x > 30) & (x < 90) & (y > 40) & (y < 60)")  # rectangle
 ```
 
-> ⚠️ `PolygonMask` и `FunctionMask` вычисляются медленнее остальных вследствие сложных вычислений, не используйте их без надобности.
+> ⚠️ `PolygonMask` and `FunctionMask` are slower than the others due to complex calculations — avoid using them unless necessary.
 
 ---
 
-## Параметры Simulation
+## Simulation Parameters
 
 ```python
 Simulation(
-    *field,                          # объекты поля (любое количество)
-    sim_width: int,                  # ширина сетки в ячейках
-    sim_height: int,                 # высота сетки в ячейках
-    px_scale: float,                 # пикселей на ячейку
-    iterations_per_frame: int = 50,  # SOR-итераций за кадр
-    diff_threshold: float = 1e-6,    # порог досрочной остановки
+    *field,                          # field objects (any number)
+    sim_width: int,                  # grid width in cells
+    sim_height: int,                 # grid height in cells
+    px_scale: float,                 # pixels per cell
+    iterations_per_frame: int = 50,  # SOR iterations per frame
+    diff_threshold: float = 1e-6,    # early stopping threshold
     view_mode: str = "g_force",      # "g_force" | "potential"
-    show_vectors: bool = True,       # векторы градиента
-    show_isolines: bool = True,      # изолинии
-    isoline_count: int = 10,         # количество изолиний
-    fps: int = 60,                   # целевой FPS
-    sor_omega: float = 1.7,          # параметр SOR [1.0, 2.0)
-    color_mapper = None,             # кастомная цветовая схема
+    show_vectors: bool = True,       # gradient vectors
+    show_isolines: bool = True,      # isolines
+    isoline_count: int = 10,         # number of isolines
+    fps: int = 60,                   # target FPS
+    sor_omega: float = 1.7,          # SOR parameter [1.0, 2.0)
+    color_mapper = None,             # custom color scheme
 )
 ```
 
-**Рекомендуемые размеры сетки:**
+**Recommended grid sizes:**
 
-| Разрешение | `px_scale` | Нагрузка |
+| Resolution | `px_scale` | Load |
 |---|---|---|
-| 80 × 80 | 8 | малая |
-| 120 × 120 | 6 | средняя (по умолчанию) |
-| 200 × 150 | 4 | большая |
+| 80 × 80 | 8 | light |
+| 120 × 120 | 6 | medium (default) |
+| 200 × 150 | 4 | heavy |
 
 ---
 
-## Управление
+## Controls
 
-### Клавиатура
+### Keyboard
 
-| Клавиша | Действие |
+| Key | Action |
 |---|---|
-| `M` | Переключить режим отображения гравитационное ускорение / потенциал |
-| `V` | Показать / скрыть векторы градиента |
-| `I` | Показать / скрыть изолинии |
+| `M` | Toggle display mode: gravitational acceleration / potential |
+| `V` | Show / hide gradient vectors |
+| `I` | Show / hide isolines |
 
-### Мышь
+### Mouse
 
-| Действие | Результат |
+| Action | Result |
 |---|---|
-| **ЛКМ + перетащить** по порталу или объекту | Переместить объект |
-| **ПКМ** по объекту | Открыть инспектор в панели SCENE |
+| **LMB + drag** on a portal or object | Move the object |
+| **RMB** on an object | Open the inspector in the SCENE panel |
 
-### Боковая панель
+### Sidebar
 
-**Вкладка SIMULATION** - параметры рендеринга и физики в реальном времени:
+**SIMULATION tab** — rendering and physics parameters in real time:
 
-- Режим отображения (сила / потенциал)
-- Векторы, изолинии, количество изолиний
-- Цветовая схема
+- Display mode (force / potential)
+- Vectors, isolines, isoline count
+- Color scheme
 - Iterations per frame, SOR ω
 
-**Вкладка INSPECTOR** - управление объектами:
+**INSPECTOR tab** — object management:
 
-- Добавить портал, якорь, объект, проводник
-- Пресеты сцен
-- Инспектор выбранного объекта (параметры маски, цвет, значение φ)
+- Add portal, anchor, object, conductor
+- Scene presets
+- Selected object inspector (mask parameters, color, φ value)
 
 ---
 
-## Цветовые схемы
+## Color Schemes
 
-Доступны в `COLOR_SCHEMES` и переключаются в панели SIMULATION:
+Available in `COLOR_SCHEMES`, switchable in the SIMULATION panel:
 
-| Название | Описание |
+| Name | Description |
 |---|---|
-| `Default` | Синий → зелёный → жёлтый → красный (для g_force) |
-| `Potential` | Синий → зелёный → красный (для potential) |
-| `Plasma` | Фиолетовый → розовый → жёлтый |
-| `Electric` | Чёрный → синий → белый |
-| `Fire` | Чёрный → красный → золотой → белый |
-| `Extra` | Синий → бирюзовый → жёлтый → красный |
+| `Default` | Blue → green → yellow → red (for g_force) |
+| `Potential` | Blue → green → red (for potential) |
+| `Plasma` | Purple → pink → yellow |
+| `Electric` | Black → blue → white |
+| `Fire` | Black → red → gold → white |
+| `Extra` | Blue → cyan → yellow → red |
 
-Кастомная схема задаётся через `color_mapper`:
+A custom scheme is set via `color_mapper`:
 
 ```python
 from colors import GradientColorMapper
 
 my_mapper = GradientColorMapper([
-    (0.0, (0,   0,  50)),   # тёмно-синий при φ = 0
-    (0.5, (255, 255, 0)),   # жёлтый при φ = 0.5
-    (1.0, (255,  50, 50)),  # красный при φ = 1
+    (0.0, (0,   0,  50)),   # dark blue at φ = 0
+    (0.5, (255, 255, 0)),   # yellow at φ = 0.5
+    (1.0, (255,  50, 50)),  # red at φ = 1
 ])
 
 sim = Simulation(..., color_mapper=my_mapper)
@@ -375,9 +379,9 @@ sim = Simulation(..., color_mapper=my_mapper)
 
 ---
 
-## Написание сцен
+## Writing Scenes
 
-Все сцены определяются в `scenes.py`. Минимальная сцена:
+All scenes are defined in `scenes.py`. A minimal scene:
 
 ```python
 from simulation import Simulation
@@ -387,11 +391,11 @@ from masks import RectangleMask, CircleMask
 def my_scene() -> Simulation:
     W, H = 120, 120
 
-    # Якоря задают фоновое поле
+    # Anchors define the background field
     top    = PotentialAnchor(RectangleMask(0, W, 0, 1),      1.0)
     bottom = PotentialAnchor(RectangleMask(0, W, H-1, H),    0.0)
 
-    # Два связанных портала
+    # Two linked portals
     p1 = Portal(CircleMask(30, 60, 10), color=(255, 153, 0))
     p2 = Portal(CircleMask(90, 60, 10), color=(0, 204, 255))
 
@@ -404,7 +408,7 @@ def my_scene() -> Simulation:
     )
 ```
 
-Затем в `main.py`:
+Then in `main.py`:
 
 ```python
 from scenes import my_scene
@@ -413,30 +417,30 @@ def main():
     my_scene().run()
 ```
 
-### Рецепты
+### Recipes
 
-**Два якоря вместо граничных условий сетки:**
+**Two anchors instead of grid boundary conditions:**
 
 ```python
-# Источник сверху, сток снизу — поле направлено вниз
+# Source at top, sink at bottom — field directed downward
 PotentialAnchor(RectangleMask(0, W, 0, 1),   1.0)
 PotentialAnchor(RectangleMask(0, W, H-1, H), 0.0)
 ```
 
-**Два параллельных экрана:**
+**Two parallel screens:**
 
 ```python
 FixedPotentialPortal(RectangleMask(20, 100, 30, 33), 0.8)
 FixedPotentialPortal(RectangleMask(20, 100, 67, 70), 0.2)
 ```
 
-**Проводник в поле экрана:**
+**Conductor in a screen field:**
 
 ```python
 ConductorObject(CircleMask(60, 50, 10), pinned=True, label="Sphere")
 ```
 
-**Непроводящее препятствие:**
+**Non-conducting obstacle:**
 
 ```python
 MaterialObject(RectangleMask(50, 70, 30, 70), pinned=True, label="Wall")
@@ -444,4 +448,4 @@ MaterialObject(RectangleMask(50, 70, 30, 70), pinned=True, label="Wall")
 
 ---
 
-**Для подробного объяснения симуляции прочитайте explanation.pdf**
+**For a detailed explanation of the simulation, read explanation.pdf**
