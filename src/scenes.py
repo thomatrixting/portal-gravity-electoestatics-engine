@@ -42,20 +42,47 @@ def test_portals_scene() -> Simulation:
     cx = W // 2
     cy = H // 2
     d = 100
-    r = 10
+    r = 50
     p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=True)
     p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
 
     obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
-                         color=(80, 220, 120), pinned=False, label="Conductor",active=True)
-    #self._add_material("Cube",
-    #                        RectangleMask, (180, 180, 180))
+                         color=(80, 220, 120), pinned=False, label="Conductor",active=True,
+                         charge=0.0, mass=1.0)
+    
     
     return Simulation(
-        *_anchors(W, H), CouplePortal(p1, p2), obs,
+        *_anchors(W, H), CouplePortal(p1, p2), obs, cond,
         sim_width=W, sim_height=H,
-        px_scale=1,
-        iterations_per_frame=50,
+        px_scale=2,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode="mom"
+    )
+
+def test_gradient() -> Simulation:
+    """A scene with a couple of portals and a material object"""
+    W, H = 500,500
+    cx = W // 2
+    cy = H // 2
+    d = 100
+    r = 50
+    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
+
+    obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
+                         color=(80, 220, 120), pinned=False, label="Conductor",active=True,
+                         charge=0.0, mass=1.0)
+    
+    cond   = PotentialAnchor(CircleMask(cx, cy, 10/2),     0.5) 
+
+    
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), obs, cond,
+        sim_width=W, sim_height=H,
+        px_scale=2,
+        iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
         solver_mode="mom"

@@ -268,6 +268,7 @@ class Simulation:
 
                 remainder = obj_bool & ~intersection
                 shift_x, shift_y = self._compute_teleport_shift(src, dst)
+
                 shifted_piece = ArrayMask._shift_grid(intersection, shift_x, shift_y)
                 new_grid = remainder | shifted_piece
 
@@ -558,11 +559,25 @@ class Simulation:
             pygame.draw.circle(self.sim_surface, q.color, (sx, sy), radius)
 
 
+    def _portals_mask(self) -> np.ndarray:
+        """Boolean grid of every teleport portal's own footprint (CouplePortal
+        / MultiPortal), used to exclude portal pixels from flux boundaries."""
+        mask = np.zeros((self.sim_height, self.sim_width), dtype=bool)
+        for obj in self.field:
+            if isinstance(obj, CouplePortal):
+                mask |= obj.p1.get_mask(self.X, self.Y)
+                mask |= obj.p2.get_mask(self.X, self.Y)
+            elif isinstance(obj, MultiPortal):
+                for p in obj.args:
+                    mask |= p.get_mask(self.X, self.Y)
+        return mask
+
     def _render_material_flux(self) -> None:
         """Draws the E-field flux through each MaterialObject as text,
         centered above the object."""
         ps = self.px_scale
         font = self._fonts["small"]
+        portals_mask = self._portals_mask()
 
         for obj in self.field:
             if not isinstance(obj, MaterialObject) or not obj.active:
@@ -571,7 +586,8 @@ class Simulation:
             if not np.any(mask):
                 continue
 
-            flux = obj.compute_flux(self.X, self.Y, self.grad_x, self.grad_y)
+            flux = obj.compute_flux(self.X, self.Y, self.grad_x, self.grad_y,
+                                     portals_mask)
             cx, cy = obj.mask.center
             sx, sy = cx * ps, cy * ps
 
