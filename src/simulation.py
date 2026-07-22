@@ -852,7 +852,7 @@ class Simulation:
         cx, cy = self._cx(), self._cy()
         q = TestCharge(x=float(cx), y=float(cy),
                     vx=0.0, vy=0.0,
-                    charge=0.01, mass=1.0,
+                    charge=0.1, mass=1.0,
                     color=(255, 220, 0), trail_len=300)
         self.test_charges.append(q)
         self._panel.invalidate_tab("SCENE")   # refresca la lista, NO toca field ni engine
@@ -874,8 +874,8 @@ class Simulation:
                         getter=lambda: q.charge,
                         setter=lambda v: setattr(q, "charge",
                                                 round(v, 4)),
-                        step=0.001, fmt="{:.4f}",
-                        min_val=-1.0, max_val=1.0))
+                        step=0.05, fmt="{:.2f}",
+                        min_val=-5.0, max_val=5.0))
         w.append(Stepper(0, 0, 0, "Mass m",
                         getter=lambda: q.mass,
                         setter=lambda v: setattr(q, "mass", max(0.01, v)),

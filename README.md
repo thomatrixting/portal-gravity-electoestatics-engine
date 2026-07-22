@@ -104,6 +104,7 @@ portals.py       — field object classes
 masks.py         — geometric masks
 colors.py        — color schemes
 ui.py            — sidebar widgets
+test_charge.py   — TestCharge class (probe particle dynamics)
 ```
 
 > `physics.py` has no Pygame dependency, for use in standalone tests.
@@ -231,6 +232,41 @@ ConductorObject(
 
 Parameters are identical to `MaterialObject`.
 
+### `TestCharge(x, y, ...)`
+
+A point probe charge that responds to the electric field but never contributes to it. Its position and velocity evolve under Newton's second law with a **Velocity Verlet** integrator, which is symplectic and keeps the energy error bounded over long runs — unlike explicit Euler. The field is sampled by bilinear interpolation of the precomputed gradient arrays, so the trajectory is smooth even at sub-cell scales.
+
+`TestCharge` is intentionally kept outside `Simulation.field`: the SOR engine never sees it, so it cannot perturb the potential. It is managed separately via `Simulation.test_charges` and updated after each SOR pass.
+
+```python
+from test_charge import TestCharge
+
+sim = my_scene()
+sim.test_charges.append(
+    TestCharge(x=60, y=40, vx=0.0, vy=0.0,
+               charge=0.01, mass=1.0,
+               color=(255, 220, 0), trail_len=300)
+)
+```
+
+Or add one interactively from the INSPECTOR tab with **+ Test Charge**.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `x`, `y` | `float` | — | Initial position (grid coordinates) |
+| `vx`, `vy` | `float` | `0.0` | Initial velocity |
+| `charge` | `float` | `1.0` | Probe charge `q` (sign sets force direction) |
+| `mass` | `float` | `1.0` | Inertial mass `m` — sets `a = (q/m)E`, unrelated to gravity |
+| `color` | `tuple` | `(255, 255, 0)` | RGB trail and dot color |
+| `active` | `bool` | `True` | Enabled / disabled |
+| `trail_len` | `int` | `200` | Number of past positions drawn as trail; `0` disables it |
+
+**Boundary handling:** position is clamped to `[0, width−1] × [0, height−1]`; the velocity component pointing outward is zeroed on contact so the charge settles at the wall instead of accumulating outward momentum.
+
+**Teleportation:** when the charge enters a portal's trigger region it is shifted to the paired portal by the same pixel offset used for `MaterialObject` teleportation, then nudged one step along its velocity vector to avoid immediate re-entry.
+
 ---
 
 ## Masks
@@ -298,7 +334,7 @@ Simulation(
     px_scale: float,                 # pixels per cell
     iterations_per_frame: int = 50,  # SOR iterations per frame
     diff_threshold: float = 1e-6,    # early stopping threshold
-    view_mode: str = "g_force",      # "g_force" | "potential"
+    view_mode: str = "potential",    # "E_magnitude" | "potential"
     show_vectors: bool = True,       # gradient vectors
     show_isolines: bool = True,      # isolines
     isoline_count: int = 10,         # number of isolines
@@ -324,7 +360,7 @@ Simulation(
 
 | Key | Action |
 |---|---|
-| `M` | Toggle display mode: gravitational acceleration / potential |
+| `M` | Toggle display mode: electric field magnitude \|E\| / potential |   
 | `V` | Show / hide gradient vectors |
 | `I` | Show / hide isolines |
 
@@ -346,7 +382,7 @@ Simulation(
 
 **INSPECTOR tab** — object management:
 
-- Add portal, anchor, object, conductor
+- Add portal, anchor, object, conductor, test charge
 - Scene presets
 - Selected object inspector (mask parameters, color, φ value)
 
@@ -358,7 +394,7 @@ Available in `COLOR_SCHEMES`, switchable in the SIMULATION panel:
 
 | Name | Description |
 |---|---|
-| `Default` | Blue → green → yellow → red (for g_force) |
+| `Default` | Blue → green → yellow → red (for electric field magnitude) |
 | `Potential` | Blue → green → red (for potential) |
 | `Plasma` | Purple → pink → yellow |
 | `Electric` | Black → blue → white |
