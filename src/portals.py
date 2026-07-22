@@ -223,6 +223,57 @@ class MaterialObject:
         if self.active:
             return self.mask(X, Y)
         return np.zeros(X.shape, dtype=bool)
+    
+    def compute_flux(self, X: "np.ndarray", Y: "np.ndarray",
+                      grad_x: "np.ndarray", grad_y: "np.ndarray") -> float:
+        """
+        Flujo del campo E = -∇φ a través de la frontera del objeto:
+
+            Φ = ∮ E · n̂ dl
+
+        Procedimiento (todo vectorizado sobre la grilla):
+          1. Se toma la máscara binaria del objeto (1 dentro, 0 fuera).
+          2. Su gradiente (np.gradient) apunta de afuera hacia adentro,
+             así que la normal saliente n̂ es ese gradiente invertido y
+             normalizado.
+          3. Se restringe a los píxeles de la frontera interior del
+             objeto (norma no nula y dentro de la máscara).
+          4. Se evalúa E = -∇φ (grad_x, grad_y del PhysicsEngine) en esos
+             píxeles y se proyecta sobre n̂.
+          5. Se integra sumando sobre el borde, con dl = 1 píxel de la
+             grilla como elemento de línea discreto.
+
+        Args:
+            X, Y:            grillas de coordenadas (mismas que usa get_mask)
+            grad_x, grad_y:  gradiente de potencial (PhysicsEngine.grad_x/grad_y)
+
+        Returns:
+            Flujo neto (float) saliendo del objeto. Positivo = flujo neto
+            hacia afuera; negativo = flujo neto entrando.
+        """
+        if not self.active:
+            return 0.0
+
+        m = self.get_mask(X, Y).astype(np.float64)
+        if not np.any(m):
+            return 0.0
+
+        dmy, dmx = np.gradient(m)
+        nx, ny = -dmx, -dmy
+        norm = np.hypot(nx, ny)
+
+        boundary = (norm > 1e-9) & (m > 0.5)
+        if not np.any(boundary):
+            return 0.0
+
+        nx_b = nx[boundary] / norm[boundary]
+        ny_b = ny[boundary] / norm[boundary]
+
+        Ex = -grad_x[boundary]
+        Ey = -grad_y[boundary]
+
+        dl = 1.0
+        return float(np.sum((Ex * nx_b + Ey * ny_b) * dl))
 
 
 class ConductorObject:

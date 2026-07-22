@@ -558,6 +558,33 @@ class Simulation:
             pygame.draw.circle(self.sim_surface, q.color, (sx, sy), radius)
 
 
+    def _render_material_flux(self) -> None:
+        """Draws the E-field flux through each MaterialObject as text,
+        centered above the object."""
+        ps = self.px_scale
+        font = self._fonts["small"]
+
+        for obj in self.field:
+            if not isinstance(obj, MaterialObject) or not obj.active:
+                continue
+            mask = obj.get_mask(self.X, self.Y)
+            if not np.any(mask):
+                continue
+
+            flux = obj.compute_flux(self.X, self.Y, self.grad_x, self.grad_y)
+            cx, cy = obj.mask.center
+            sx, sy = cx * ps, cy * ps
+
+            txt = font.render(f"\u03a6 = {flux:+.3f}", True, (255, 255, 255))
+            bg = pygame.Surface((txt.get_width() + 6, txt.get_height() + 4))
+            bg.set_alpha(150)
+            bg.fill((0, 0, 0))
+
+            tx = sx - txt.get_width() / 2
+            ty = sy - (obj.mask.size()[1] if obj.mask.size() else 0) * ps / 2 - 18
+
+            self.sim_surface.blit(bg, (tx - 3, ty - 2))
+            self.sim_surface.blit(txt, (tx, ty))
 
     def draw(self) -> None:
         self._render_field()
@@ -565,7 +592,7 @@ class Simulation:
         self._render_portals()
         self._render_portal_arrows()
         self._render_vectors()
-        self._render_test_charges()
+        self._render_material_flux()
         self.screen.blit(self.sim_surface, (0, 0))
         self._panel.draw(self.screen, self._fonts)
         pygame.display.flip()
