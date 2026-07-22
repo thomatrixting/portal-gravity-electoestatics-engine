@@ -39,8 +39,8 @@ def main() -> None:
     #sim = example_mom_couple()
     #sim.run()
     #sim = example_mom()
-    #sim = test_portals_scene()
-    sim = test_gradient()
+    sim = test_portals_scene()
+    #sim = test_gradient()
     #sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()

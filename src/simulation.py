@@ -628,6 +628,7 @@ class Simulation:
         self._render_portal_arrows()
         self._render_vectors()
         self._render_material_flux()
+        self._render_test_charges()
         self.screen.blit(self.sim_surface, (0, 0))
         self._panel.draw(self.screen, self._fonts)
         pygame.display.flip()
@@ -689,7 +690,7 @@ class Simulation:
                     self._dragging_mask.translate(dx, dy)
                     self._invalidate_caches()
                     self._isolines_dirty = True
-                    self._panel.invalidate_tab("SCENE")
+                    self._panel.invalidate_tab("INSPECTOR")
 
         return True
 
@@ -917,7 +918,7 @@ class Simulation:
                     charge=0.01, mass=1.0,
                     color=(255, 220, 0), trail_len=300)
         self.test_charges.append(q)
-        self._panel.invalidate_tab("SCENE")   # refresca la lista, NO toca field ni engine
+        self._panel.invalidate_tab("INSPECTOR")   # refresca la lista, NO toca field ni engine
 
     def _open_test_charge_inspector(self, q: TestCharge) -> None:
         self._panel.show_inspector(self._build_test_charge_inspector(q))
@@ -970,7 +971,7 @@ class Simulation:
     def _refresh_field(self) -> None:
         self._bake_movable_masks()
         self._invalidate_caches()
-        self._panel.invalidate_tab("SCENE")
+        self._panel.invalidate_tab("INSPECTOR")
 
     # region Presets
     def _presets(self) -> dict:
@@ -986,7 +987,7 @@ class Simulation:
         self.field = field_objs
         self._bake_movable_masks()
         self._reset_engine()
-        self._panel.invalidate_tab("SCENE")
+        self._panel.invalidate_tab("INSPECTOR")
         self._panel.close_inspector()
 
     def _preset_couple_portals(self) -> None:
@@ -1044,7 +1045,7 @@ class Simulation:
 
     def _close_inspector(self) -> None:
         self._panel.close_inspector()
-        self._panel.invalidate_tab("SCENE")
+        self._panel.invalidate_tab("INSPECTOR")
 
     def _build_inspector(self, obj) -> List:
         w: List = []
@@ -1251,7 +1252,7 @@ class Simulation:
         if to_remove is not None:
             self.field.remove(to_remove)
         self._invalidate_caches()
-        self._panel.invalidate_tab("SCENE")
+        self._panel.invalidate_tab("INSPECTOR")
         self._close_inspector()
 
     def _set_isoline_count(self, n: int) -> None:

@@ -52,13 +52,13 @@ def test_portals_scene() -> Simulation:
     
     
     return Simulation(
-        *_anchors(W, H), CouplePortal(p1, p2), obs, cond,
+        *_anchors(W, H), CouplePortal(p1, p2), obs, 
         sim_width=W, sim_height=H,
         px_scale=2,
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
-        solver_mode="mom"
+        solver_mode="sor"
     )
 
 def test_gradient() -> Simulation:
