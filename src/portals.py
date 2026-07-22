@@ -91,7 +91,11 @@ class Portal:
                 region = RectangleMask(x_min - self.back_depth, x_min, y_min, y_max)
             else:
                 region = RectangleMask(x_max, x_max + self.back_depth, y_min, y_max)
-        return region(X, Y)
+
+        # Include the portal's own footprint: an object overlapping the
+        # portal's visible surface has already crossed it, so it must not
+        # be left resting on top of the portal graphic either.
+        return region(X, Y) & ~self.get_mask(X, Y)
 
 
 class FixedPotentialPortal(Portal):
@@ -225,7 +229,8 @@ class MaterialObject:
         return np.zeros(X.shape, dtype=bool)
     
     def compute_flux(self, X: "np.ndarray", Y: "np.ndarray",
-                      grad_x: "np.ndarray", grad_y: "np.ndarray") -> float:
+                      grad_x: "np.ndarray", grad_y: "np.ndarray",
+                      portals_mask: "np.ndarray") -> float:
         """
         Flujo del campo E = -∇φ a través de la frontera del objeto:
 
@@ -263,6 +268,7 @@ class MaterialObject:
         norm = np.hypot(nx, ny)
 
         boundary = (norm > 1e-9) & (m > 0.5)
+        boundary &= ~portals_mask  # ignore any pixels that are part of a portal
         if not np.any(boundary):
             return 0.0
 

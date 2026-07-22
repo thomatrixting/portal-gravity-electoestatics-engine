@@ -28,7 +28,6 @@ See README.md for details
 
 
 from scenes import *
- #TODO test that material object no loger affect the field
 
 def main() -> None:
     #sim = vertical_portals_many_objects_scene()
@@ -41,6 +40,7 @@ def main() -> None:
     #sim.run()
     #sim = example_mom()
     sim = test_portals_scene()
+    #sim = test_gradient()
     #sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
