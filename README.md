@@ -2,27 +2,15 @@
 
 A 2D interactive simulation of electric potential with portals. The engine solves the Laplace equation for the electric potential using either the **Method of Moments (MOM)** with point matching or **Successive Over-Relaxation (SOR)**. See `/explanation/report.pdf` for the full derivation.
 
-The engine ships with a `pygame` UI for building and interacting with a scene: potential anchors, boundaries (Dirichlet or Neumann), and portals. It also simulates the effect of the resulting field on material objects and test charges, so the hypothetical effects of a portal on the electric field can be observed directly. A test charge is a point probe that follows the field under Newtonian dynamics without perturbing it, similar to a small ball rolling on the potential surface. The displayed field magnitude represents electric force, not gravitational force as in earlier versions of this engine. A set of premade scenarios is included to demonstrate this.
-
-## Objectives and Methodology
+The engine ships with a `pygame` UI for building and interacting with a scene: potential anchors, boundaries (Dirichlet or Neumann), and portals. It also simulates the effect of the resulting field on material objects and test charges, so the hypothetical effects of a portal on electric potential can be observed directly. A set of premade scenarios is included to demonstrate this that are described on [Results](#Results).
 
 This project was built for the final assignment of the Electrodynamics course at the National University of Colombia, taught by Ph.D. Juan Domingo Baena. The goal is to analyze how a hypothetical portal would affect electric potential, under a set of axioms detailed in `/explanation/report.pdf`.
 
-It builds on and extends the work of @ZinCin, adapting it to an electrostatics context by adding the MOM solver and new object classes.
-
-The physics engine follows an object-oriented design, with the `pygame` UI layered on top for interaction; the simulation can also run headless, without the UI. Aside from portals, objects behave as they would in any potential-field simulation: boundaries, fixed potentials, and conductors affect the field by imposing a condition on the pixels they occupy, while material objects and test charges simply move along the gradient without affecting the potential themselves, since modeling that feedback would require electrodynamics effects outside the scope of this simulation. Material objects also carry their own mass and charge, not just a shape: the same charge-to-mass ratio that drives a test charge's motion drives a material object's motion too, just applied to a movable mask instead of a point.
-
-Portals are handled differently depending on the solver. Under SOR, which re-evaluates the field every iteration, each portal's potential is set to the average of its paired portal's pixels on every step. Under MOM, both portals in a pair are instead assigned a shared, unknown potential that the linear system solves for directly. For interaction with material objects and test charges, each portal has a region on one side that acts as its teleport trigger: any part of an object entering that region reappears at the paired portal. Portals are therefore one-directional for teleportation purposes, which is sufficient for the scope of this project.
-
-SOR and MOM are two different ways of solving for the same field, and only one is active per simulation. SOR is an iterative relaxation that re-evaluates the whole grid every step, so the field, and anything coupled to it, keeps updating as the simulation runs. MOM instead discretizes the boundaries into segments and solves a single dense linear system for the potential, once, at scene setup; the resulting field is never recomputed afterward. This makes MOM a poor fit for anything meant to update the field on the fly, such as a `ConductorObject`, whose potential is supposed to re-equalize to its neighbors every step: doing that correctly under MOM would mean re-solving the whole boundary system on every frame, which is too expensive to run in real time, so this update currently doesn't happen. Because of this, when MOM is active SOR does not run at all. The two are mutually exclusive solver modes for a given simulation, not layered on top of each other.
-
-<img width="1213" height="749" alt="изображение" src="https://github.com/user-attachments/assets/c9d2846c-b941-43e8-99c8-67707d9a2044" />
-
----
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Methodology](#methodology)
 - [Physics](#physics)
 - [Project Architecture](#project-architecture)
 - [Field Objects](#field-objects)
@@ -59,6 +47,17 @@ or switch the scene in the inspector.
 
 ---
 
+# Methodology 
+
+It builds on and extends the work of @ZinCin, adapting it to an electrostatics context by adding the MOM solver and new object classes.
+
+The physics engine follows an object-oriented design, with the `pygame` UI layered on top for interaction; the simulation can also run headless, without the UI. Aside from portals, objects behave as they would in any potential-field simulation: boundaries, fixed potentials, and conductors affect the field by imposing a condition on the pixels they occupy, while material objects and test charges simply move along the gradient without affecting the potential themselves, since modeling that feedback would require electrodynamics effects outside the scope of this simulation.
+
+For interaction with material objects and test charges, each portal has a region on one side that acts as its teleport trigger: any part of an object entering that region reappears at the paired portal. Portals are therefore one-directional for teleportation purposes, which is sufficient for the scope of this project.
+
+---
+
+
 ## Physics
 
 The simulation solves the Laplace equation:
@@ -68,6 +67,14 @@ The simulation solves the Laplace equation:
 ```
 
 Method: **Red-Black Gauss-Seidel SOR** — alternates between "red" and "black" checkerboard cells, which doubles convergence speed compared to plain Jacobi.
+
+### Solvers
+
+Two different ways of solving for the same field are available, and only one is active per simulation.
+
+**SOR** is an iterative relaxation that re-evaluates the whole grid every step, so the field, and anything coupled to it, keeps updating as the simulation runs. Portal potential is handled by averaging each pair's pixels on every step.
+
+**MOM** (Method of Moments) discretizes the boundaries into segments and solves a single dense linear system for the potential once, at scene setup; the resulting field is never recomputed afterward. Portal pairs are instead assigned a shared, unknown potential that the linear system solves for directly. This makes MOM a poor fit for anything meant to update the field on the fly, such as a `ConductorObject`, whose potential is supposed to re-equalize to its neighbors every step: doing that correctly under MOM would mean re-solving the whole boundary system on every frame, which is too expensive to run in real time, so this update currently doesn't happen. Because of this, when MOM is active SOR does not run at all.
 
 ### Boundary Conditions
 
@@ -92,16 +99,21 @@ Controls convergence speed:
 - `ω → 2.0` — near-instant but unstable
 
 ---
+## Results
 
+---
 ## Project Architecture
 
 ```
 main.py          — entry point
 scenes.py        — predefined scenes (examples demonstrating how portals work)
-simulation.py    — main class, game loop, rendering, UI
+simulation.py    — main class, game loop, rendering, UI, teleportation logic
 physics.py       — SOR solver
+mom_solver.py    — MOM linear system assembly and solve
+mom_mesh.py      — discretizes a mask's boundary into segments for MOM
 portals.py       — field object classes
 masks.py         — geometric masks
+test_charge.py   — point probe charges (Velocity Verlet integrator)
 colors.py        — color schemes
 ui.py            — sidebar widgets
 ```
@@ -172,6 +184,8 @@ p3 = Portal(RectangleMask(40, 60, 90, 90), (0, 0, 255))
 multi = MultiPortal((p1, p2, p3))
 ```
 
+> ⚠️ `MultiPortal` only couples potential. Teleportation of `MaterialObject`s and `TestCharge`s is wired to `CouplePortal` pairs, so objects will pass through a `MultiPortal` without being teleported.
+
 **`Portal` Parameters:**
 
 | Parameter | Type | Description |
@@ -184,7 +198,9 @@ multi = MultiPortal((p1, p2, p3))
 
 ### `MaterialObject(mask, ...)`
 
-A solid obstacle. Cells inside are **excluded from SOR** — the field wraps around the object from outside. The potential inside is fixed at the initial value and is not updated.
+A solid obstacle, currently used for teleportation and rendering only. `PhysicsEngine` has an `ignore_material_objects` flag (default `True`, not yet exposed through `Simulation`) that, if set to `False`, excludes the object's cells from SOR so the field wraps around it from outside, with the potential inside fixed at its initial value.
+
+Once an object can move, its mask is baked from an analytic shape (circle, rectangle, ...) into a plain boolean pixel grid (`ArrayMask`). Teleportation works directly on that grid: the part of the mask sitting in a portal's back region is cut out, shifted to the paired portal's position, and merged back with the rest, so the object ends up as two separated pixel groups that still count as one `MaterialObject`. A geometric mask cannot represent that split shape, which is why the pixel grid representation is required for teleportation.
 
 ```python
 # Pinned block
@@ -230,6 +246,30 @@ ConductorObject(
 ```
 
 Parameters are identical to `MaterialObject`.
+
+`to_mom_boundary(grid_array, dx=1.0)` converts the conductor's mask into a `BoundaryMesh` for the MOM solver.
+
+---
+
+### `TestCharge(x, y, ...)`
+
+A point probe charge: it feels the field (`E = -∇φ`) and moves under it, but unlike `MaterialObject` it never affects the field itself. Position is continuous, sampled from the grid by bilinear interpolation, and integrated with Velocity Verlet.
+
+```python
+TestCharge(x=30, y=60, charge=1.0, mass=1.0, color=(255, 255, 0))
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `x`, `y` | `float` | — | Initial position |
+| `vx`, `vy` | `float` | `0.0` | Initial velocity |
+| `charge` | `float` | `1.0` | q, sign and magnitude both matter |
+| `mass` | `float` | `1.0` | m, used in `a = qE/m` |
+| `color` | `tuple` | `(255, 255, 0)` | RGB color |
+| `active` | `bool` | `True` | Enabled / disabled |
+| `trail_len` | `int` | `200` | Trajectory points kept for drawing; `0` disables the trail |
 
 ---
 
