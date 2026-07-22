@@ -86,9 +86,6 @@ Two different ways of solving for the same field are available, and only one is 
 
 The top and bottom edges are constant source and sink. The side boundaries are transparent: the field flows freely left and right. (This implements gravity similar to Earth's.)
 
-### Initial State
-
-The potential is initialized with a linear gradient φ = 1 (top) → 0 (bottom). This is the exact solution to Laplace's equation under the chosen boundary conditions, so without any objects the field will not change. Objects create permanent deviations from this background.
 
 ### Parameter ω (SOR)
 
