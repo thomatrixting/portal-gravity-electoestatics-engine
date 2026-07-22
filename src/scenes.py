@@ -83,7 +83,7 @@ def test_gradient() -> Simulation:
         sim_width=W, sim_height=H,
         px_scale=2,
         iterations_per_frame=500,
-        sor_omega=1.8,
+        sor_omega=1.9,
         isoline_count=15,
         solver_mode="mom"
     )
@@ -134,12 +134,12 @@ def example_portal_on_capacitor() -> Simulation:
 
     #define the capacitor
     capacitor = [
-        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0),
+        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
         PotentialAnchor(RectangleMask(3*W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
     ]
 
-    p1 = Portal(RectangleMask(W/4, W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0))
-    p2 = Portal(RectangleMask(3*W/4, 3*W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255))
+    p1 = Portal(RectangleMask(W/4, W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False)
+    p2 = Portal(RectangleMask(3*W/4, 3*W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=False)
 
     return Simulation(
         *capacitor, CouplePortal(p1,p2),
@@ -147,7 +147,8 @@ def example_portal_on_capacitor() -> Simulation:
         px_scale=px_sclae,
         iterations_per_frame=2000,
         sor_omega=1.7,
-        isoline_count=50
+        isoline_count=50,
+        solver_mode="mom"
     )
 
 

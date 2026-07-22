@@ -560,8 +560,21 @@ class Simulation:
 
 
     def _portals_mask(self) -> np.ndarray:
-        """Boolean grid of every teleport portal's own footprint (CouplePortal
-        / MultiPortal), used to exclude portal pixels from flux boundaries."""
+        """Boolean grid of every teleport portal's footprint (CouplePortal /
+        MultiPortal), dilated by 1px, used to exclude portal pixels from
+        flux boundaries.
+
+        A MaterialObject mid-teleport is split into a remainder (touching
+        the source portal) and a shifted piece (touching the destination
+        portal) - see Simulation._teleport_material_objects. The cut where
+        the object was severed is an artifact, not real surface, and must
+        be excluded from compute_flux's boundary. The source-side cut
+        lands exactly on the portal's own mask cell, but the
+        destination-side cut lands 1px short of it (back_region_mask
+        excludes the portal's own footprint asymmetrically - see
+        Portal.back_region_mask), so the raw footprint alone only cancels
+        one of the two cuts. Dilating by 1px covers both.
+        """
         mask = np.zeros((self.sim_height, self.sim_width), dtype=bool)
         for obj in self.field:
             if isinstance(obj, CouplePortal):
@@ -570,7 +583,13 @@ class Simulation:
             elif isinstance(obj, MultiPortal):
                 for p in obj.args:
                     mask |= p.get_mask(self.X, self.Y)
-        return mask
+
+        dilated = mask.copy()
+        dilated[1:, :]  |= mask[:-1, :]
+        dilated[:-1, :] |= mask[1:, :]
+        dilated[:, 1:]  |= mask[:, :-1]
+        dilated[:, :-1] |= mask[:, 1:]
+        return dilated
 
     def _render_material_flux(self) -> None:
         """Draws the E-field flux through each MaterialObject as text,
