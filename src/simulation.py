@@ -84,6 +84,7 @@ class Simulation:
         self.E_magnitude = self._engine.E_magnitude
 
         # MOM: se resuelve una sola vez en setup
+        self._mom_status = "sin resolver"
         if self.solver_mode == "mom":
             self._mom_setup()
 
@@ -131,6 +132,7 @@ class Simulation:
                 meshes.append(BoundaryMesh(obj.mask, W, H, obj.potential_value))
 
         if not meshes and not coupled_pairs:
+            self._mom_status = "sin objetos con phi fijo"
             return
 
         solver = MOMSolver2D(meshes, coupled_pairs)
@@ -149,8 +151,19 @@ class Simulation:
         self._engine.compute_gradients()
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.E_magnitude = self._engine.E_magnitude
+        h = getattr(self._engine, "height", 1.0)
+        self.g_force = np.sqrt(self.grad_x ** 2 + self.grad_y ** 2) * h
         self.diff = 0.0
+
+        self._mom_status = f"OK ({solver.N} seg.)"
+        # El campo cambió: forzar redibujado de isolíneas y overlays
+        self._isolines_dirty = True
+        self._portal_render_dirty = True
+
+    def _recompute_mom(self) -> None:
+        """Callback del botón 'Recalcular MOM': vuelve a resolver el
+        sistema MOM tomando las posiciones actuales de cargas/portales."""
+        self._mom_setup()
 
     def update_physics(self) -> None:
         if self.solver_mode == "mom":
@@ -803,6 +816,14 @@ class Simulation:
                                                        round(v, 2)),
                              step=0.05, fmt="{:.2f}", min_val=1.0, max_val=1.99))
         panel.add(T, Divider(0, 0, 0))
+
+        if self.solver_mode == "mom":
+            panel.add(T, SectionHeader(0, 0, 0, "MOM"))
+            panel.add(T, Label(0, 0, 0, "Estado",
+                               value_fn=lambda: self._mom_status))
+            panel.add(T, Button(0, 0, 0, 28, "Recalcular MOM",
+                                callback=self._recompute_mom))
+            panel.add(T, Divider(0, 0, 0))
 
         panel.add(T, SectionHeader(0, 0, 0, "Hotkeys"))
 

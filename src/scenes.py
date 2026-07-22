@@ -81,7 +81,7 @@ def test_gradient() -> Simulation:
     return Simulation(
         *_anchors(W, H), CouplePortal(p1, p2), obs, cond,
         sim_width=W, sim_height=H,
-        px_scale=2,
+        px_scale=1,
         iterations_per_frame=500,
         sor_omega=1.9,
         isoline_count=15,
