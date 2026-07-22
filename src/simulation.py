@@ -128,6 +128,11 @@ class Simulation:
                 m1 = BoundaryMesh(obj.p1.mask, W, H, potential_value=0.0)
                 m2 = BoundaryMesh(obj.p2.mask, W, H, potential_value=0.0)
                 coupled_pairs.append((m1, m2))
+            elif isinstance(obj, MultiPortal):
+                # N portales comparten phi desconocido (grupo neutro)
+                group = [BoundaryMesh(p.mask, W, H, potential_value=0.0)
+                         for p in obj.args]
+                coupled_pairs.append(group)
             elif hasattr(obj, 'potential_value') and hasattr(obj, 'mask'):
                 meshes.append(BoundaryMesh(obj.mask, W, H, obj.potential_value))
 

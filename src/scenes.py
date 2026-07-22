@@ -217,6 +217,21 @@ def triple_portals() -> Simulation:
          isoline_count=15,
      )
 
+def triple_portals_mom() -> Simulation:
+    W, H = 600, 500  # escalado x5 desde 120,100
+
+    p1 = Portal(RectangleMask(200, 300, 150, 150), (255, 0, 0))
+    p2 = Portal(RectangleMask(200, 300, 300, 300), (0, 255, 0))
+    p3 = Portal(RectangleMask(200, 300, 450, 450), (0, 0, 255))
+
+    return Simulation(
+        *_anchors(W, H), MultiPortal((p1, p2, p3)),
+        sim_width=W, sim_height=H,
+        px_scale=1,
+        isoline_count=15,
+        solver_mode="mom",
+    )
+
 def example_mom_conductor():
     from mom_mesh import BoundaryMesh
     from mom_solver import MOMSolver2D
