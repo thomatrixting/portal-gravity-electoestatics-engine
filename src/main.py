@@ -44,7 +44,7 @@ def main() -> None:
     #sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
-    sim = triple_portals_mom()
+    #sim = triple_portals_mom()
     sim.run()
 
 

@@ -619,6 +619,8 @@ class Simulation:
         for obj in self.field:
             if not isinstance(obj, MaterialObject) or not obj.active:
                 continue
+            if not obj.show_flux:
+                continue
             mask = obj.get_mask(self.X, self.Y)
             if not np.any(mask):
                 continue
@@ -1116,6 +1118,9 @@ class Simulation:
                             callback=lambda o=obj: (
                                 setattr(o, "vx", 0.0),
                                 setattr(o, "vy", 0.0))))
+            w.append(Toggle(0, 0, 0, "Show flux (\u03a6)",
+                            getter=lambda o=obj: o.show_flux,
+                            setter=lambda v, o=obj: setattr(o, "show_flux", v)))
 
         # Mask (hidden for baked ArrayMask objects - there's no formula left
         # to expose numerically, only a pixel grid; reposition by dragging)

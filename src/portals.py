@@ -197,6 +197,7 @@ class MaterialObject:
         pinned: if True - cannot be moved
         label:  name shown in the UI
         active: if False - ignored
+        show_flux: bool - if true it show in every frame the flux
     """
 
     def __init__(self, mask: "Mask",
@@ -205,7 +206,8 @@ class MaterialObject:
                  label: str = "Object",
                  mass: float = 1.0,
                  charge: float = 1.0,
-                 active: bool = True) -> None:
+                 active: bool = True,
+                 show_flux: bool = False) -> None:
         self.mask   = mask
         self.color  = color
         self.pinned = pinned
@@ -215,6 +217,7 @@ class MaterialObject:
         self.active = active
         self.vx: float = 0.0
         self.vy: float = 0.0
+        self.show_flux = show_flux
 
     def __repr__(self) -> str:
         return (f"MaterialObject({self.label!r}, pinned={self.pinned}, "
