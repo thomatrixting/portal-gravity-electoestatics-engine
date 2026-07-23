@@ -171,7 +171,11 @@ class Simulation:
                 self._engine._rebuild_cache()
             self._teleport_material_objects()
             self._update_material_dynamics()
+<<<<<<< HEAD
             self._record_frame()
+=======
+            self._update_test_charges()
+>>>>>>> scene_continuity
             return  # MOM ya resolvió en setup, no hay iteraciones
         self._engine.sor_omega = self.sor_omega
         self.diff = self._engine.run_steps(

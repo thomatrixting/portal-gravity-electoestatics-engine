@@ -119,7 +119,7 @@ def test_portals_scene(solver='sor') -> Simulation:
     return Simulation(
         *_anchors(W, H), CouplePortal(p1, p2), obs, 
         sim_width=W, sim_height=H,
-        px_scale=2,
+        px_scale=1,
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
@@ -189,7 +189,7 @@ def vertical_portals_many_objects_scene() -> Simulation:
 def example_portal_on_capacitor() -> Simulation:
     """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
     W,H = 400,200
-    px_sclae = 4
+    px_sclae = 3
 
     cap_length = H/2
     portal_lenght= H/4
@@ -384,3 +384,95 @@ def example_mom_cargas_afuera() -> Simulation:
         solver_mode="mom",
         show_isolines=True,
     )
+
+def axiom_continuity_sor() -> Simulation:
+    """
+    Axiom: potential continuity across portal boundaries (SOR solver).
+    """
+    W, H = 200, 200
+    cx = W // 2
+    portal_h = H // 2
+    portal_y0 = (H - portal_h) // 2
+    portal_y1 = portal_y0 + portal_h
+    gap = 4
+
+    # anchors LATERALES: campo apunta en x, hacia el portal
+    left_anchor  = PotentialAnchor(RectangleMask(0, 1, 0, H), 0.7)
+    right_anchor = PotentialAnchor(RectangleMask(W-1, W, 0, H), 0.3)
+
+    p1 = Portal(
+        RectangleMask(cx - gap, cx - gap, portal_y0, portal_y1),
+        color=(255, 153, 0),
+        facing_positive=False,
+        normal_axis="x",
+    )
+    p2 = Portal(
+        RectangleMask(cx + gap, cx + gap, portal_y0, portal_y1),
+        color=(0, 204, 255),
+        facing_positive=True,
+        normal_axis="x",
+    )
+
+    sim = Simulation(
+        left_anchor, right_anchor, CouplePortal(p1, p2),
+        sim_width=W, sim_height=H,
+        px_scale=3,
+        solver_mode="sor",
+        iterations_per_frame=500,
+        sor_omega=1.85,
+        show_isolines=True,
+        isoline_count=20,
+    )
+    sim.test_charges.append(
+        TestCharge(x=20.0, y=float(H // 2),
+                   vx=0.0, vy=0.0,
+                   charge=0.20, mass=3.0,
+                   color=(255, 255, 0),
+                   trail_len=800)
+    )
+    return sim
+
+
+def axiom_continuity_mom() -> Simulation:
+    """
+    Axiom: potential continuity across portal boundaries (MOM solver).
+    """
+    W, H = 200, 200
+    cx = W // 2
+    portal_h = H // 2
+    portal_y0 = (H - portal_h) // 2
+    portal_y1 = portal_y0 + portal_h
+    gap = 4
+
+    left_anchor  = PotentialAnchor(RectangleMask(0, 1, 0, H), 0.7)
+    right_anchor = PotentialAnchor(RectangleMask(W-1, W, 0, H), 0.3)
+
+    p1 = Portal(
+        RectangleMask(cx - gap, cx - gap, portal_y0, portal_y1),
+        color=(255, 153, 0),
+        facing_positive=False,
+        normal_axis="x",
+    )
+    p2 = Portal(
+        RectangleMask(cx + gap, cx + gap, portal_y0, portal_y1),
+        color=(0, 204, 255),
+        facing_positive=True,
+        normal_axis="x",
+    )
+
+    sim = Simulation(
+        left_anchor, right_anchor, CouplePortal(p1, p2),
+        sim_width=W, sim_height=H,
+        px_scale=3,
+        solver_mode="mom",
+        show_isolines=True,
+        isoline_count=20,
+    )
+    sim.test_charges.append(
+        TestCharge(x=20.0, y=float(H // 2),
+                   vx=0.0, vy=0.0,
+                   charge=0.20, mass=3.0,
+                   color=(255, 255, 0),
+                   trail_len=800)
+    )
+    return sim
