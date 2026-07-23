@@ -32,7 +32,7 @@ from scenes import *
 def main() -> None:
     sim = equipotential_scene(solver='mom')
     #sim = faling_object_scene()
-    
+
     #sim = vertical_portals_many_objects_scene()
     #sim = test_portals_scene()  
     #sim = example_mom_carga_entre_portales()
@@ -48,7 +48,7 @@ def main() -> None:
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
     # sim = axiom_continuity_sor()
-    sim = axiom_continuity_mom()
+    # sim = axiom_continuity_mom()
 
     sim.run()
 
