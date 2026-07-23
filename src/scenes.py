@@ -7,6 +7,7 @@ from simulation import Simulation
 from portals import *
 from masks import *
 from test_charge import TestCharge
+from colors import default_color_mapper, colormap_plasma
 
 
 def _anchors(sim_width, sim_height):
@@ -23,7 +24,71 @@ def _null_anchors(sim_width, sim_height):
         PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
     ]
 
-def test_portals_scene_mom() -> Simulation:
+#scenes
+
+def equipotential_scene(solver='sor') -> Simulation:
+    """A scene with a couple of portals and a material object"""
+    W, H = 800,400
+    cx = W // 4
+    cy = H // 4
+    d = 75
+    shift = 120
+    p1 = Portal(RectangleMask(cx-d+shift,cx+d+shift,d,d), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d-shift,cx+d-shift, H-d, H-d), (0, 0, 255), facing_positive=False)
+
+    r = 10
+
+    cy = 100
+    obs_1 = MaterialObject(RectangleMask(cx-r-shift, cx+r-shift, cy-r, cy+r),
+                         color=(80, 220, 120), pinned=False, label="obj 1",active=True,
+                         charge=1.0, mass=0.5)
+
+    cx = 600
+    cy = 100
+    obs_2 = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
+                        color=(80, 220, 120), pinned=False, label="obj 2",active=True,
+                        charge=1.0, mass=0.5)
+    
+    
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2),obs_1, obs_2, 
+        sim_width=W, sim_height=H,
+        px_scale=2,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode=solver
+    )
+
+
+def faling_object_scene() -> Simulation:
+    """A scene with a couple of portals and a material object"""
+    W, H = 500,500
+    cx = W // 2
+    cy = H // 2
+    d = 100
+    r = 10
+    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=False)
+    p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
+
+    obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
+                         color=(80, 220, 120), pinned=False, label="Conductor",active=True,
+                         charge=5.0, mass=0.5)
+    
+    
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), obs, 
+        sim_width=W, sim_height=H,
+        px_scale=2,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode="mom"
+    )
+
+#testing
+
+def test_portals_scene_mom(solver='sor') -> Simulation:
     W, H = 80, 80
     top    = PotentialAnchor(RectangleMask(0, W, 0, 1),      1.0)
     bottom = PotentialAnchor(RectangleMask(0, W, H-1, H),    0.0)
@@ -36,7 +101,7 @@ def test_portals_scene_mom() -> Simulation:
         show_isolines=True,
     )
 
-def test_portals_scene() -> Simulation:
+def test_portals_scene(solver='sor') -> Simulation:
     """A scene with a couple of portals and a material object"""
     W, H = 500,500
     cx = W // 2
@@ -58,7 +123,7 @@ def test_portals_scene() -> Simulation:
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
-        solver_mode="sor"
+        solver_mode=solver
     )
 
 def test_gradient() -> Simulation:

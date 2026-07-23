@@ -3,9 +3,13 @@ simulation.py - main simulation file that ties all the logic together
 """
 
 
+import json
+from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 import pygame
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from test_charge import TestCharge
 
 from portals import *
@@ -113,6 +117,12 @@ class Simulation:
         self._fonts = _init_fonts()
         self._panel = self._build_panel()
 
+        # Data export (snapshot / recording)
+        self._recording: bool = False
+        self._output_dir_cache: Optional[Path] = None
+        self._last_snapshot_path: Optional[Path] = None
+        self._reset_recording_state()
+
     def _mom_setup(self) -> None:
         from mom_mesh import BoundaryMesh
         from mom_solver import MOMSolver2D
@@ -161,6 +171,7 @@ class Simulation:
                 self._engine._rebuild_cache()
             self._teleport_material_objects()
             self._update_material_dynamics()
+            self._record_frame()
             return  # MOM ya resolvió en setup, no hay iteraciones
         self._engine.sor_omega = self.sor_omega
         self.diff = self._engine.run_steps(
@@ -175,6 +186,7 @@ class Simulation:
         self._teleport_material_objects()
         self._update_test_charges()
         self._isolines_dirty = True
+        self._record_frame()
 
     def _update_material_dynamics(self) -> None:
         """
@@ -621,6 +633,210 @@ class Simulation:
             self.sim_surface.blit(bg, (tx - 3, ty - 2))
             self.sim_surface.blit(txt, (tx, ty))
 
+    # ------------------------------------------------------------------
+    # Data export (snapshot / recording)
+    # ------------------------------------------------------------------
+
+    def _output_dir(self) -> Path:
+        if self._output_dir_cache is None:
+            out = Path(__file__).resolve().parent.parent / "output"
+            out.mkdir(parents=True, exist_ok=True)
+            self._output_dir_cache = out
+        return self._output_dir_cache
+
+    def _is_pinned_like(self, obj) -> bool:
+        if isinstance(obj, (MaterialObject, ConductorObject)):
+            return obj.pinned
+        return isinstance(obj, (Portal, PotentialAnchor))
+
+    def _iter_pinned_candidates(self):
+        """Flattens CouplePortal/MultiPortal into their child portals."""
+        for obj in self.field:
+            if isinstance(obj, CouplePortal):
+                yield obj.p1
+                yield obj.p2
+            elif isinstance(obj, MultiPortal):
+                yield from obj.args
+            else:
+                yield obj
+
+    def _collect_pinned_objects_data(self) -> Tuple[List[dict], Dict[str, np.ndarray]]:
+        meta: List[dict] = []
+        arrays: Dict[str, np.ndarray] = {}
+        for obj in self._iter_pinned_candidates():
+            if not self._is_pinned_like(obj):
+                continue
+            i = len(meta)
+            key = f"pinned_mask_{i}"
+            meta.append({
+                "index": i,
+                "array_key": key,
+                "type": type(obj).__name__,
+                "label": getattr(obj, "label", None),
+                "color": list(getattr(obj, "color", (0, 0, 0))),
+                "potential_value": getattr(obj, "potential_value", None),
+                "active": getattr(obj, "active", True),
+                "facing_positive": getattr(obj, "facing_positive", None),
+                "normal_axis": getattr(obj, "normal_axis", None),
+            })
+            arrays[key] = obj.get_mask(self.X, self.Y)
+        return meta, arrays
+
+    def _collect_field_arrays(self) -> Dict[str, np.ndarray]:
+        return {
+            "potential": self.potential.copy(),
+            "grad_x": self.grad_x.copy(),
+            "grad_y": self.grad_y.copy(),
+            "E_magnitude": self.E_magnitude.copy(),
+        }
+
+    def _sim_params_dict(self) -> dict:
+        return {
+            "sim_width": self.sim_width,
+            "sim_height": self.sim_height,
+            "px_scale": self.px_scale,
+            "solver_mode": self.solver_mode,
+            "sor_omega": self.sor_omega,
+            "iterations_per_frame": self.iterations_per_frame,
+            "diff_threshold": self.diff_threshold,
+            "view_mode": self.view_mode,
+            "fps": self.fps,
+            "total_iterations": self.total_iterations,
+            "diff": self.diff,
+        }
+
+    def _save_snapshot(self) -> None:
+        try:
+            meta, pinned_arrays = self._collect_pinned_objects_data()
+            field_arrays = self._collect_field_arrays()
+
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            out = self._output_dir()
+            npz_path = out / f"snapshot_{ts}.npz"
+            json_path = out / f"snapshot_{ts}.json"
+
+            np.savez_compressed(npz_path, **pinned_arrays, **field_arrays)
+            with open(json_path, "w") as f:
+                json.dump({
+                    "kind": "snapshot",
+                    "timestamp": ts,
+                    "sim_params": self._sim_params_dict(),
+                    "pinned_objects": meta,
+                    "field_arrays": ["potential", "grad_x", "grad_y", "E_magnitude"],
+                }, f, indent=2)
+
+            self._last_snapshot_path = npz_path
+            print(f"[export] snapshot saved to {npz_path}")
+        except Exception as e:
+            print(f"[export] snapshot failed: {e}")
+
+    def _toggle_recording(self) -> None:
+        if self._recording:
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _start_recording(self) -> None:
+        self._recording = True
+        self._recording_start_ts = datetime.now()
+
+        self._rec_pinned_meta, self._rec_pinned_arrays = self._collect_pinned_objects_data()
+        self._rec_field_arrays = self._collect_field_arrays()
+
+        self._rec_material_objs = [
+            obj for obj in self.field
+            if isinstance(obj, MaterialObject) and obj.active
+        ]
+        self._rec_test_charges = list(self.test_charges)
+
+        self._rec_material_frames: Dict[int, list] = {
+            i: [] for i in range(len(self._rec_material_objs))
+        }
+        self._rec_charge_frames: Dict[int, list] = {
+            i: [] for i in range(len(self._rec_test_charges))
+        }
+        self._rec_frame_count = 0
+
+    def _record_frame(self) -> None:
+        if not self._recording:
+            return
+        for i, obj in enumerate(self._rec_material_objs):
+            self._rec_material_frames[i].append(obj.get_mask(self.X, self.Y).copy())
+        for i, q in enumerate(self._rec_test_charges):
+            self._rec_charge_frames[i].append((q.x, q.y))
+        self._rec_frame_count += 1
+
+    def _stop_recording(self) -> None:
+        self._recording = False
+
+        if self._rec_frame_count == 0:
+            print("[export] recording stopped with 0 frames, nothing saved")
+            self._reset_recording_state()
+            return
+
+        try:
+            mat_arrays = {
+                f"material_mask_{i}": np.stack(frames, axis=0)
+                for i, frames in self._rec_material_frames.items() if frames
+            }
+            charge_arrays = {
+                f"charge_pos_{i}": np.asarray(frames, dtype=np.float64)
+                for i, frames in self._rec_charge_frames.items() if frames
+            }
+
+            ts = self._recording_start_ts.strftime("%Y%m%d_%H%M%S")
+            out = self._output_dir()
+            npz_path = out / f"recording_{ts}.npz"
+            json_path = out / f"recording_{ts}.json"
+
+            np.savez_compressed(
+                npz_path,
+                **self._rec_pinned_arrays, **self._rec_field_arrays,
+                **mat_arrays, **charge_arrays,
+            )
+            with open(json_path, "w") as f:
+                json.dump({
+                    "kind": "recording",
+                    "timestamp": ts,
+                    "frame_count": self._rec_frame_count,
+                    "sim_params": self._sim_params_dict(),
+                    "pinned_objects": self._rec_pinned_meta,
+                    "material_objects": [
+                        {
+                            "index": i, "array_key": f"material_mask_{i}",
+                            "label": obj.label, "color": list(obj.color),
+                            "charge": obj.charge, "mass": obj.mass,
+                        }
+                        for i, obj in enumerate(self._rec_material_objs)
+                    ],
+                    "test_charges": [
+                        {
+                            "index": i, "array_key": f"charge_pos_{i}",
+                            "charge": q.charge, "mass": q.mass,
+                            "color": list(q.color),
+                        }
+                        for i, q in enumerate(self._rec_test_charges)
+                    ],
+                }, f, indent=2)
+
+            print(f"[export] recording saved to {npz_path} "
+                  f"({self._rec_frame_count} frames)")
+        except Exception as e:
+            print(f"[export] recording failed: {e}")
+        finally:
+            self._reset_recording_state()
+
+    def _reset_recording_state(self) -> None:
+        self._recording_start_ts = None
+        self._rec_pinned_meta = []
+        self._rec_pinned_arrays = {}
+        self._rec_field_arrays = {}
+        self._rec_material_objs = []
+        self._rec_test_charges = []
+        self._rec_material_frames = {}
+        self._rec_charge_frames = {}
+        self._rec_frame_count = 0
+
     def draw(self) -> None:
         self._render_field()
         self._render_isolines()
@@ -803,6 +1019,17 @@ class Simulation:
                              setter=lambda v: setattr(self, "sor_omega",
                                                        round(v, 2)),
                              step=0.05, fmt="{:.2f}", min_val=1.0, max_val=1.99))
+        panel.add(T, Divider(0, 0, 0))
+
+        panel.add(T, SectionHeader(0, 0, 0, "Export"))
+        panel.add(T, Button(0, 0, 0, 26, "Save Snapshot",
+                             callback=self._save_snapshot))
+        panel.add(T, Button(0, 0, 0, 26, "Start Recording",
+                             callback=self._toggle_recording,
+                             active_fn=lambda: self._recording))
+        panel.add(T, Label(0, 0, 0, "Frames",
+                            value_fn=lambda: str(self._rec_frame_count)
+                            if self._recording else "-"))
         panel.add(T, Divider(0, 0, 0))
 
         panel.add(T, SectionHeader(0, 0, 0, "Hotkeys"))
