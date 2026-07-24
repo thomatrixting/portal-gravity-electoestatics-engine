@@ -46,6 +46,9 @@ _ISOLINE_ALPHA = 80 / 255                        # matches simulation.py:_render
 _FILL_ALPHA = 210 / 255                          # matches simulation.py:_build_portal_render_cache
 _ARROW_LEN = 6.0                                 # grid units, matches _render_portal_arrows
 
+_FINAL_PLOTS_DIR = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/final_plots")
+_FINAL_PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def _load(path) -> Tuple[np.lib.npyio.NpzFile, dict]:
     npz_path = Path(path)
@@ -472,6 +475,140 @@ def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True,
     return axes
 
 
+def _plot_speed_into_ax(ax, recording_path, every_n_frames: int = 50) -> None:
+    """Adapts plot_velocities' speed-only computation to draw into an
+    externally-provided Axes (plot_velocities always builds its own figure,
+    so this is used when several recordings need to share one figure)."""
+    data, meta = _load(recording_path)
+    portals_mask = _portal_mask_union(data, meta)
+
+    objects = []
+    for obj_meta in meta.get("material_objects", []):
+        stack = data[obj_meta["array_key"]]
+        pos = _centroid_trajectory(stack)
+        contact = _contact_frames(portals_mask, mask_stack=stack)
+        objects.append((obj_meta.get("label") or f"MaterialObject {obj_meta['index']}", pos, contact))
+    for q_meta in meta.get("test_charges", []):
+        pos = data[q_meta["array_key"]]
+        contact = _contact_frames(portals_mask, positions=pos)
+        objects.append((f"TestCharge {q_meta['index']}", pos, contact))
+
+    stride = max(1, every_n_frames)
+    for label, pos, contact in objects:
+        n = len(pos)
+        idxs = list(range(0, n, stride))
+        if idxs[-1] != n - 1:
+            idxs.append(n - 1)
+        frames = np.asarray(idxs, dtype=float)
+        sampled = pos[idxs]
+
+        vx = np.gradient(sampled[:, 0], frames)
+        vy = np.gradient(sampled[:, 1], frames)
+        speed = np.hypot(vx, vy)
+
+        if contact is not None:
+            contact_sampled = contact[idxs]
+            bad = contact_sampled.copy()
+            bad[:-1] |= contact_sampled[1:]
+            bad[1:] |= contact_sampled[:-1]
+            speed[bad] = np.nan
+
+        ax.plot(frames, speed, label=label)
+
+    ax.set_ylabel("velocidad (unidades de grilla / frame)")
+    ax.set_xlabel("frame")
+    ax.legend()
+    ax.grid(True)
+
+
+def _plot_distance_grid(entries, base: Path, suptitle: str, save_name: str, show: bool):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9), sharex=True, sharey=True)
+    for ax, (fname, vdist) in zip(axes.flat, entries):
+        plot_field(base / fname, ax=ax, show=False, scheme="Extra",
+                  show_isolines=True, show_vectors=True,
+                  title=f"d = {vdist}")
+
+    fig.suptitle(suptitle, fontsize=18, fontweight="bold")
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.90, bottom=0.06,
+                        wspace=0.05, hspace=0.15)
+    fig.savefig(str(_FINAL_PLOTS_DIR / save_name), dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_close_portals_scene(show: bool = True):
+    """Dos figuras de 2x2 subgraficas (ejes x/y compartidos): campo
+    potencial para las distintas distancias VERTICALES entre portales
+    guardadas en output/close_portals/ (0, 40, 80, 120), una para MOM y
+    otra para SOR."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/close_portals")
+
+    mom_entries = [
+        ("snapshot_mom_0d_close.npz", 0),
+        ("snapshot_mom_40d_close.npz", 40),
+        ("snapshot_mom_80d_close.npz", 80),
+        ("snapshot_mom_120d_close.npz", 120),
+    ]
+    fig_mom = _plot_distance_grid(
+        mom_entries, base,
+        "Campo potencial (MOM) para distintas distancias verticales entre portales",
+        "campo_por_distancia_mom.png", show)
+
+    sor_entries = [
+        ("snapshot_sor_0d.npz", 0),
+        ("snapshot_sor_40d_close.npz", 40),
+        ("snapshot_sor_80d_close.npz", 80),
+        ("snapshot_sor_120d_close.npz", 120),
+    ]
+    fig_sor = _plot_distance_grid(
+        sor_entries, base,
+        "Campo potencial (SOR) para distintas distancias verticales entre portales",
+        "campo_por_distancia_sor.png", show)
+
+    return fig_mom, fig_sor
+
+
+def plot_equipotencial_field_mom(show: bool = True):
+    """Figura independiente: campo potencial equipotencial, MOM."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+    ax = plot_field(base / "snapshot_mom_800_400.npz", show=show,
+                    scheme="Extra", show_isolines=True, show_vectors=True,
+                    title="Campo equipotencial - MOM",
+                    save_path=str(_FINAL_PLOTS_DIR / "equipotential_field_mom.png"))
+    return ax
+
+
+def plot_equipotencial_field_sor(show: bool = True):
+    """Figura independiente: campo potencial equipotencial, SOR."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+    ax = plot_field(base / "snapshot_sor_800_400.npz", show=show,
+                    scheme="Extra", show_isolines=True, show_vectors=True,
+                    title="Campo equipotencial - SOR",
+                    save_path=str(_FINAL_PLOTS_DIR / "equipotential_field_sor.png"))
+    return ax
+
+
+def plot_velocities_comparison(show: bool = True):
+    """Grafica de 1x2 subgraficas: velocidad absoluta de los objetos
+    rastreados, MOM vs SOR, sobre la misma geometria (800x400)."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+    _plot_speed_into_ax(axes[0], base / "recording_mom_800_400.npz", every_n_frames=50)
+    axes[0].set_title("Velocidad absoluta - MOM")
+    _plot_speed_into_ax(axes[1], base / "recording_sor_800_400.npz", every_n_frames=50)
+    axes[1].set_title("Velocidad absoluta - SOR")
+    fig.suptitle("Comparación de velocidad absoluta: MOM vs SOR")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "velocities_comparison.png"), dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    return fig
+
+
 def plot_equipotencial_scene(show = True):
 
     #SOR 800x400 objects
@@ -480,25 +617,31 @@ def plot_equipotencial_scene(show = True):
     recording_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/recording_sor_800_400.npz"
 
     safe_path = Path(snapshot_path)
-    show = False
-    plot_field(snapshot_path, field="potential", scheme="Extra",
-              show_isolines=True, show_vectors=True, show=show,title="Equipotential field with portals and fixed potentials SOR",save_path=str(safe_path.with_name("equipotential_field_sor.png")))
-    plot_trajectories(recording_path, every_n_frames=50, field="potential", show=show, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects SOR", save_path=str(safe_path.with_name("trajectories_sor.png")))
-    plot_velocities(recording_path, show=show,components=["speed"],every_n_frames=50, title="Velocities of tracked objects SOR", save_path=str(safe_path.with_name("velocities_sor.png")))
+    # Comentado: ya generado, no queremos que se abra una ventana cada vez
+    # que se corre el archivo. Descomentar si se necesita regenerar.
+    # plot_field(snapshot_path, field="potential", scheme="Extra",
+    #           show_isolines=True, show_vectors=True, show=False,title="Equipotential field with portals and fixed potentials SOR",save_path=str(safe_path.with_name("equipotential_field_sor.png")))
+    # plot_trajectories(recording_path, every_n_frames=50, field="potential", show=False, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects SOR", save_path=str(safe_path.with_name("trajectories_sor.png")))
+    # plot_velocities(recording_path, show=False,components=["speed"],every_n_frames=50, title="Velocities of tracked objects SOR", save_path=str(safe_path.with_name("velocities_sor.png")))
 
     # MOM 800x400 objects
-    show = True
     snapshot_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/snapshot_mom_800_400.npz"
     recording_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/recording_mom_800_400.npz"
 
     safe_path = Path(snapshot_path)
 
-    plot_field(snapshot_path, field="potential", scheme="Extra",
-              show_isolines=True, show_vectors=True, show=show,title="Equipotential field with portals and fixed potentials MOM",save_path=str(safe_path.with_name("equipotential_field_mom.png")))
-    plot_trajectories(recording_path, every_n_frames=50, field="potential", show=show, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects MOM", save_path=str(safe_path.with_name("trajectories_mom.png")))
-    plot_velocities(recording_path, show=show,components=["speed"],every_n_frames=50, title="Velocities of tracked objects MOM", save_path=str(safe_path.with_name("velocities_mom.png")))
+    # Comentado por el mismo motivo que el bloque SOR de arriba.
+    # plot_field(snapshot_path, field="potential", scheme="Extra",
+    #           show_isolines=True, show_vectors=True, show=False,title="Equipotential field with portals and fixed potentials MOM",save_path=str(safe_path.with_name("equipotential_field_mom.png")))
+    # plot_trajectories(recording_path, every_n_frames=50, field="potential", show=False, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects MOM", save_path=str(safe_path.with_name("trajectories_mom.png")))
+    # plot_velocities(recording_path, show=False,components=["speed"],every_n_frames=50, title="Velocities of tracked objects MOM", save_path=str(safe_path.with_name("velocities_mom.png")))
 
-    # MOM 800x400 close portals
-    
+    # Graficas finales (final_plots) - unicas que se muestran (show=True)
+    plot_close_portals_scene(show=show)
+    plot_equipotencial_field_mom(show=show)
+    plot_equipotencial_field_sor(show=show)
+    plot_velocities_comparison(show=show)
+
+
 if __name__ == "__main__":
     plot_equipotencial_scene(show=True)

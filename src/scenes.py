@@ -97,7 +97,8 @@ def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simula
         solver_mode=solver,
         show_vectors=True,
         show_isolines=True,
-        color_mapper=extra_mapper()
+        color_mapper=extra_mapper(),
+        mom_images=True
     )
 
 def faling_object_scene() -> Simulation:
