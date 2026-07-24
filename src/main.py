@@ -34,17 +34,18 @@ def equipotencials_closeportals_falling():
     #sim = close_portals_scene(solver='sor', distance_portals=120)
     #sim = close_portals_scene(solver='sor', distance_portals=80)
     #sim = close_portals_scene(solver='sor', distance_portals=40)
-    sim = close_portals_scene(solver='mom', distance_portals=0)
+    #sim = close_portals_scene(solver='mom', distance_portals=0)
     #sim = falling_object_scene(solver='sor',pinned=True)
-    sim.run()
-    sim = falling_object_scene(solver='mom',pinned=True)
+    #sim = falling_object_scene(solver='mom',pinned=True)
+    sim = falling_object_scene(solver='sor',pinned=True)
     sim.run()
 
 
 def main() -> None:
-    sim = equipotencials_closeportals_falling()
+    equipotencials_closeportals_falling()
     
     #sim = equipotential_scene(solver='mom')
+    #sim.run()
     #sim = faling_object_scene()
     
     #sim = vertical_portals_many_objects_scene()
@@ -63,3 +64,6 @@ def main() -> None:
     #sim = triple_portals()
     # sim = axiom_continuity_sor()
     #sim = axiom_continuity_mom()
+
+if __name__ == "__main__":
+    main()
