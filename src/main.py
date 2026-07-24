@@ -61,5 +61,9 @@ def main() -> None:
     # sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
-    # sim = axiom_continuity_sor()
-    #sim = axiom_continuity_mom()
+    #sim = triple_portals_mom()
+    sim.run()
+
+
+if __name__ == "__main__":
+    main()
