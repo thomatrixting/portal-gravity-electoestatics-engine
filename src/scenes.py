@@ -9,15 +9,22 @@ from masks import *
 from test_charge import TestCharge
 from colors import default_color_mapper, colormap_plasma, extra_mapper
 
-def _anchors(sim_width, sim_height):
-    """Special preset with potential anchors so gravity behaves like on Earth"""
+def _anchors(sim_width, sim_height, extend=False):
+    """Special preset with potential """
+
+    if extend:
+        sim_min_width = -sim_width * 0.25
+        sim_max_width = sim_width * 1.25
+    else:
+        sim_min_width = 0
+        sim_max_width = sim_width
     return [
-        PotentialAnchor(RectangleMask(0, sim_width, 0, 1), 1.0),
-        PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
+        PotentialAnchor(RectangleMask(sim_min_width, sim_max_width, 0, 1), 1.0),
+        PotentialAnchor(RectangleMask(sim_min_width, sim_max_width, sim_height-1, sim_height), 0.0),
     ]
 
 def _null_anchors(sim_width, sim_height):
-    """Special preset with potential anchors so gravity behaves like on Earth"""
+    """Special preset with potential """
     return [
         PotentialAnchor(RectangleMask(0, sim_width, 0, 1), 0.0),
         PotentialAnchor(RectangleMask(0, sim_width, sim_height-1, sim_height), 0.0),
@@ -88,7 +95,7 @@ def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simula
     p2 = Portal(RectangleMask(px-portals_width-shift, px+portals_width-shift, cy+apart_d, cy+apart_d+1), (0, 0, 255), facing_positive=False)
     
     return Simulation(
-        *_anchors(W, H), CouplePortal(p1, p2), 
+        *_anchors(W, H, extend=True), CouplePortal(p1, p2), 
         sim_width=W, sim_height=H,
         px_scale=2, 
         iterations_per_frame=500,
@@ -101,7 +108,7 @@ def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simula
         mom_images=True
     )
 
-def faling_object_scene() -> Simulation:
+def falling_object_scene(solver='sor',pinned=True) -> Simulation:
     """A scene with a couple of portals and a material object"""
     W, H = 500,500
     cx = W // 2
@@ -112,7 +119,7 @@ def faling_object_scene() -> Simulation:
     p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
 
     obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
-                         color=(80, 220, 120), pinned=False, label="Conductor",active=True,
+                         color=(80, 220, 120), pinned=pinned, label="Conductor",active=True,
                          charge=5.0, mass=0.5)
     
     
@@ -123,7 +130,7 @@ def faling_object_scene() -> Simulation:
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
-        solver_mode="mom",
+        solver_mode=solver,
         show_vectors=True,
         show_isolines=True,
         color_mapper=extra_mapper()

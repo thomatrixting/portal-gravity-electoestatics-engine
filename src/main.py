@@ -29,15 +29,21 @@ See README.md for details
 
 from scenes import *
 
-def main() -> None:
+def equipotencials_closeportals_falling():
     #sim = equipotential_scene(solver='sor')
     #sim = close_portals_scene(solver='sor', distance_portals=120)
     #sim = close_portals_scene(solver='sor', distance_portals=80)
     #sim = close_portals_scene(solver='sor', distance_portals=40)
     sim = close_portals_scene(solver='mom', distance_portals=0)
-    #sim = faling_object_scene()
+    #sim = falling_object_scene(solver='sor',pinned=True)
     sim.run()
+    sim = falling_object_scene(solver='mom',pinned=True)
+    sim.run()
+
+def main() -> None:
+  None
 
 
 if __name__ == "__main__":
     main()
+    equipotencials_closeportals_falling()
