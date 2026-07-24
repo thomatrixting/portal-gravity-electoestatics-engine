@@ -30,7 +30,11 @@ See README.md for details
 from scenes import *
 
 def main() -> None:
-    sim = equipotential_scene(solver='mom')
+    #sim = equipotential_scene(solver='sor')
+    #sim = close_portals_scene(solver='mom', distance_portals=120)
+    #sim = close_portals_scene(solver='mom', distance_portals=80)
+    #sim = close_portals_scene(solver='mom', distance_portals=40)
+    sim = close_portals_scene(solver='mom', distance_portals=0)
     #sim = faling_object_scene()
     sim.run()
 

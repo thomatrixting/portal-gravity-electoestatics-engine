@@ -7,8 +7,7 @@ from simulation import Simulation
 from portals import *
 from masks import *
 from test_charge import TestCharge
-from colors import default_color_mapper, colormap_plasma
-
+from colors import default_color_mapper, colormap_plasma, extra_mapper
 
 def _anchors(sim_width, sim_height):
     """Special preset with potential anchors so gravity behaves like on Earth"""
@@ -26,40 +25,80 @@ def _null_anchors(sim_width, sim_height):
 
 #scenes
 
-def equipotential_scene(solver='sor') -> Simulation:
+def equipotential_scene(solver='sor',pinned=True,distance_portals=120) -> Simulation:
     """A scene with a couple of portals and a material object"""
-    W, H = 800,400
-    cx = W // 4
-    cy = H // 4
-    d = 75
-    shift = 120
-    p1 = Portal(RectangleMask(cx-d+shift,cx+d+shift,d,d), (255, 0, 0), facing_positive=True)
-    p2 = Portal(RectangleMask(cx-d-shift,cx+d-shift, H-d, H-d), (0, 0, 255), facing_positive=False)
-
-    r = 10
-
-    cy = 100
-    obs_1 = MaterialObject(RectangleMask(cx-r-shift, cx+r-shift, cy-r, cy+r),
-                         color=(80, 220, 120), pinned=False, label="obj 1",active=True,
-                         charge=1.0, mass=0.5)
-
-    cx = 600
-    cy = 100
-    obs_2 = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
-                        color=(80, 220, 120), pinned=False, label="obj 2",active=True,
-                        charge=1.0, mass=0.5)
+    W, H = 800, 400
+    cx = W // 2
+    cy = H // 2
     
+    # Valores estáticos multiplicados por 2
+    portals_width = 80  
+    apart_d = distance_portals       # Distancia vertical de los portales
+    shift = 120         # Distancia entre portales
+    
+    # Se ajusta automáticamente al nuevo W (800 * 0.35 = 280)
+    px = int(W * 0.35)
+    
+    p1 = Portal(RectangleMask(px-portals_width+shift, px+portals_width+shift, cy-apart_d, cy-apart_d+1), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(px-portals_width-shift, px+portals_width-shift, cy+apart_d, cy+apart_d+1), (0, 0, 255), facing_positive=False)
+
+    # Radio y posición inicial multiplicados por 2
+    r = 12
+    y_start = 20
+    
+    obs_1 = MaterialObject(RectangleMask(px-r-shift, px+r-shift, y_start-r, y_start+r),
+                         color=(80, 220, 120), pinned=pinned, label="obj 1", active=True,
+                         charge=1.0, mass=2.0)
+
+    # Se ajusta automáticamente al nuevo W (800 * 0.8 = 640)
+    x2_start = int(W * 0.8)
+    
+    obs_2 = MaterialObject(RectangleMask(x2_start-r, x2_start+r, y_start-r, y_start+r),
+                        color=(80, 220, 120), pinned=pinned, label="obj 2", active=True,
+                        charge=1.0, mass=2.0)
     
     return Simulation(
-        *_anchors(W, H), CouplePortal(p1, p2),obs_1, obs_2, 
+        *_anchors(W, H), CouplePortal(p1, p2), obs_1, obs_2, 
         sim_width=W, sim_height=H,
-        px_scale=2,
+        px_scale=2, 
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
-        solver_mode=solver
+        solver_mode=solver,
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper()
     )
 
+def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simulation:
+    """A scene with a couple of portals and a material object"""
+    W, H = 500, 400
+    cx = W // 2
+    cy = H // 2
+    
+    # Valores estáticos multiplicados por 2
+    portals_width = 70  
+    apart_d = distance_portals       # Distancia vertical de los portales
+    shift = 100         # Distancia entre portales
+    
+    # Se ajusta automáticamente al nuevo W (800 * 0.35 = 280)
+    px = int(W * 0.5)
+    
+    p1 = Portal(RectangleMask(px-portals_width+shift, px+portals_width+shift, cy-apart_d, cy-apart_d+1), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(px-portals_width-shift, px+portals_width-shift, cy+apart_d, cy+apart_d+1), (0, 0, 255), facing_positive=False)
+    
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), 
+        sim_width=W, sim_height=H,
+        px_scale=2, 
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode=solver,
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper()
+    )
 
 def faling_object_scene() -> Simulation:
     """A scene with a couple of portals and a material object"""
@@ -68,7 +107,7 @@ def faling_object_scene() -> Simulation:
     cy = H // 2
     d = 100
     r = 10
-    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=False)
+    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=True)
     p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
 
     obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
@@ -83,7 +122,10 @@ def faling_object_scene() -> Simulation:
         iterations_per_frame=500,
         sor_omega=1.8,
         isoline_count=15,
-        solver_mode="mom"
+        solver_mode="mom",
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper()
     )
 
 #testing

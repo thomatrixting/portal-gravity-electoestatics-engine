@@ -6,12 +6,14 @@ The engine ships with a `pygame` UI for building and interacting with a scene: p
 
 This project was built for the final assignment of the Electrodynamics course at the National University of Colombia, taught by Ph.D. Juan Domingo Baena. The goal is to analyze how a hypothetical portal would affect electric potential, under a set of axioms detailed in `/explanation/report.pdf`.
 
+<img width="1240" height="990" alt="Image" src="https://github.com/user-attachments/assets/d882b51a-6deb-4f6d-aeba-995c29da66cd" />
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Methodology](#methodology)
 - [Physics](#physics)
+- [Results](#Results)
 - [Project Architecture](#project-architecture)
 - [Field Objects](#field-objects)
 - [Masks](#masks)
