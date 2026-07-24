@@ -33,6 +33,7 @@ class Simulation:
                  sim_height: int,
                  px_scale: float,
                  solver_mode: str = "sor",
+                 mom_images: bool = False,
                  iterations_per_frame: int = 50,
                  diff_threshold: float = 1e-4,
                  view_mode: str = "potential",
@@ -79,6 +80,7 @@ class Simulation:
         self._bake_movable_masks()
 
         self.solver_mode = solver_mode
+        self.mom_images = mom_images
 
         self._engine = PhysicsEngine(
             sim_width, sim_height, self.field, sor_omega=self.sor_omega)
@@ -143,7 +145,10 @@ class Simulation:
         if not meshes and not coupled_pairs:
             return
 
-        solver = MOMSolver2D(meshes, coupled_pairs)
+        solver = MOMSolver2D(
+            meshes, coupled_pairs,
+            image_walls=(0, W) if self.mom_images else None,
+        )
         solver.build_and_solve()
 
         xs = np.arange(W, dtype=float)
@@ -697,6 +702,7 @@ class Simulation:
             "sim_height": self.sim_height,
             "px_scale": self.px_scale,
             "solver_mode": self.solver_mode,
+            "mom_images": self.mom_images,
             "sor_omega": self.sor_omega,
             "iterations_per_frame": self.iterations_per_frame,
             "diff_threshold": self.diff_threshold,
