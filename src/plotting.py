@@ -79,6 +79,18 @@ def _draw_vectors(ax, grad_x: np.ndarray, grad_y: np.ndarray, step: int, magnitu
     xs_grid, ys_grid = np.meshgrid(xs, ys)
     ax.quiver(xs_grid, ys_grid, gx, gy, color=[_VECTOR_COLOR], angles="xy", scale=magnitude)
 
+def _wire_format_coord(ax, arr: np.ndarray, field: str) -> None:
+    """Cursor readout shows the underlying scalar field value, not the
+    color-mapped RGB triplet imshow would report by default."""
+    H, W = arr.shape
+
+    def format_coord(x: float, y: float) -> str:
+        ix, iy = int(round(x)), int(round(y))
+        if 0 <= iy < H and 0 <= ix < W:
+            return f"x={x:.1f} y={y:.1f} {field}={arr[iy, ix]:.4f}"
+        return f"x={x:.1f} y={y:.1f}"
+
+    ax.format_coord = format_coord
 
 def _render_background(ax, data, field: str, scheme: str,
                        show_isolines: bool, isoline_count: int,
@@ -89,6 +101,7 @@ def _render_background(ax, data, field: str, scheme: str,
     arr = data[_FIELD_KEYS[field]]
     rgb = _field_rgb(arr, scheme)
     ax.imshow(rgb, origin="upper")
+    _wire_format_coord(ax, arr, field)
 
     if show_isolines:
         _draw_isolines(ax, arr, isoline_count)
@@ -334,7 +347,7 @@ def _contact_frames(portals_mask: Optional[np.ndarray],
     return contact
 
 
-def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True):
+def plot_velocities(recording_path, max_value, every_n_frames: int = 10, show: bool = True):
     """
     Plots velocity magnitude and its x/y components vs. frame index, as 3
     subplots (|v|, vx, vy), each with one line per tracked object
@@ -383,6 +396,12 @@ def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True)
         vx = np.gradient(sampled[:, 0], frames)
         vy = np.gradient(sampled[:, 1], frames)
         speed = np.hypot(vx, vy)
+
+        if max_value is not None:
+            bad_values = speed > max_value
+            vx[bad_values] = np.nan
+            vy[bad_values] = np.nan
+            speed[bad_values] = np.nan
 
         if contact is not None:
             contact_sampled = contact[idxs]
